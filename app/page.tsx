@@ -38,6 +38,15 @@ const versions = [
       "A guided renewal pathway that replaces dashboard noise with a clear stage, useful progress, and one meaningful next move.",
     tags: ["Renewal pathway", "Focus action", "Progress health"],
   },
+  {
+    href: "/v5",
+    number: "05",
+    name: "Dashboard V5",
+    eyebrow: "Evidence intelligence",
+    description:
+      "A proof-first workspace that connects each captured activity to the APC requirements it completes.",
+    tags: ["Evidence coverage", "Smart capture", "Submission confidence"],
+  },
 ];
 
 export default function VersionPicker() {
@@ -57,7 +66,7 @@ export default function VersionPicker() {
         <h1>Choose a dashboard direction.</h1>
         <span>
           Compare a detailed overview, a decisive command center, a calendar-led
-          renewal plan, and a guided renewal pathway.
+          renewal plan, a guided renewal pathway, and an evidence-first workspace.
         </span>
       </section>
 
