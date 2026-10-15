@@ -29,6 +29,15 @@ const versions = [
       "A calendar-led plan that turns APC renewal into a clear schedule of learning, milestones, and quick wins.",
     tags: ["APC calendar", "Next-up module", "Milestone rail"],
   },
+  {
+    href: "/v4",
+    number: "04",
+    name: "Dashboard V4",
+    eyebrow: "Progress navigator",
+    description:
+      "A guided renewal pathway that replaces dashboard noise with a clear stage, useful progress, and one meaningful next move.",
+    tags: ["Renewal pathway", "Focus action", "Progress health"],
+  },
 ];
 
 export default function VersionPicker() {
@@ -47,8 +56,8 @@ export default function VersionPicker() {
         <p>APC renewal, made calmer</p>
         <h1>Choose a dashboard direction.</h1>
         <span>
-          Compare a detailed overview, a decisive command center, and a
-          calendar-led renewal plan.
+          Compare a detailed overview, a decisive command center, a calendar-led
+          renewal plan, and a guided renewal pathway.
         </span>
       </section>
 
