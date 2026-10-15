@@ -20,6 +20,15 @@ const versions = [
       "A focused renewal co-pilot that makes the next best action, compliance gaps, and deadline plan immediately clear.",
     tags: ["Next best action", "Renewal runway", "Priority gaps"],
   },
+  {
+    href: "/v3",
+    number: "03",
+    name: "Dashboard V3",
+    eyebrow: "Renewal planner",
+    description:
+      "A calendar-led plan that turns APC renewal into a clear schedule of learning, milestones, and quick wins.",
+    tags: ["APC calendar", "Next-up module", "Milestone rail"],
+  },
 ];
 
 export default function VersionPicker() {
@@ -38,8 +47,8 @@ export default function VersionPicker() {
         <p>APC renewal, made calmer</p>
         <h1>Choose a dashboard direction.</h1>
         <span>
-          V1 preserves the original overview. V2 tests a more decisive renewal
-          command center, built around one clear next step.
+          Compare a detailed overview, a decisive command center, and a
+          calendar-led renewal plan.
         </span>
       </section>
 
