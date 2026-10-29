@@ -176,7 +176,7 @@ def keep_lease(heartbeat, interval=30):
     return stop
 
 
-def run_job(job, heartbeat, client=None):
+def run_job(job, heartbeat, client=None, *, review_only=False):
     # Material warnings drive partial/failed. Soft Firehose fill warnings stay on the job but do not
     # alone mark a successful Tavily extract as partial (matches empty-search soft-warn honesty).
     warnings, soft_warnings, candidates, sources = [], [], [], []
@@ -273,7 +273,7 @@ def run_job(job, heartbeat, client=None):
             warnings.append(str(exc))
         saved = 0
         unsaved = []
-        if client is not None and candidates:
+        if client is not None and candidates and not review_only:
             try:
                 connect = client.get('/internal/v1/catalogue/connect')
                 if connect.status_code == 200:
@@ -302,7 +302,7 @@ def run_job(job, heartbeat, client=None):
                     + str(len(candidates))
                     + ' catalogue saves failed; unsaved kept on job.'
                 )
-            elif candidates:
+            elif candidates and not review_only:
                 warnings.append('Falling back to job-complete candidate insert without Jev decide/save.')
         return {
             'lease_token': job['lease_token'],

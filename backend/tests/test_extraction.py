@@ -37,6 +37,33 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(result[0]['model_id'],'test/open-weight-model')
         self.assertEqual(usage['model_tokens'], 30)
 
+    def test_review_only_completion_is_success_not_catalogue_failure(self):
+        with patch('scraper.worker.discover', return_value={'sources': [self.source], 'warnings': []}), patch(
+            'scraper.worker.extract_training', return_value=[self.row]
+        ):
+            result = run_job({'query': 'GP', 'lease_token': 'test'}, lambda: None, review_only=True)
+        self.assertEqual(result['status'], 'succeeded')
+        self.assertEqual(result['warnings'], [])
+        self.assertEqual(result['candidates'], [self.row])
+        self.assertEqual(result['usage']['catalogue_saved'], 0)
+
+    def test_review_only_keeps_real_source_failures_partial(self):
+        with patch('scraper.worker.discover', return_value={
+            'sources': [self.source, {'url': 'https://example.org/empty'}], 'warnings': []
+        }), patch('scraper.worker.extract_training', return_value=[self.row]):
+            result = run_job({'query': 'GP', 'lease_token': 'test'}, lambda: None, review_only=True)
+        self.assertEqual(result['status'], 'partial')
+        self.assertTrue(any('no extractable text' in warning for warning in result['warnings']))
+        self.assertEqual(result['candidates'], [self.row])
+
+    def test_unexpected_missing_catalogue_client_remains_partial(self):
+        with patch('scraper.worker.discover', return_value={'sources': [self.source], 'warnings': []}), patch(
+            'scraper.worker.extract_training', return_value=[self.row]
+        ):
+            result = run_job({'query': 'GP', 'lease_token': 'test'}, lambda: None)
+        self.assertEqual(result['status'], 'partial')
+        self.assertTrue(any('Falling back' in warning for warning in result['warnings']))
+
     def test_reported_model_tokens_rejects_bool_nan_inf(self):
         from scraper.extraction import reported_model_tokens
 

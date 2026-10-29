@@ -22,7 +22,8 @@ class ServerlessTests(unittest.TestCase):
             self.assertEqual(self.client.post('/api/v1/admin/ingestion-jobs/x/run').status_code, 403)
 
     def test_completed_job_is_not_executed_twice(self):
-        def fake_run(job, heartbeat):
+        def fake_run(job, heartbeat, *, review_only=False):
+            self.assertTrue(review_only)
             heartbeat()
             return {'lease_token': job['lease_token'], 'status': 'succeeded',
                     'candidates': [], 'sources': [], 'warnings': [], 'usage': {}}
@@ -52,6 +53,25 @@ class ServerlessTests(unittest.TestCase):
                 db.commit()
             self.assertEqual(self.client.post('/api/v1/admin/ingestion-jobs/' + job_id + '/run').status_code, 409)
             run.assert_not_called()
+
+    def test_review_only_run_persists_candidate_without_publishing(self):
+        from backend.tests.test_portal import Candidate, Course, sample
+        training = sample('Review-only course')
+        source = {'url': training['source_url'], 'raw_content': training['source_text']}
+        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch(
+            'scraper.worker.configuration'
+        ), patch('scraper.worker.firehose_configured', return_value=False), patch(
+            'scraper.worker.discover', return_value={'sources': [source], 'warnings': []}
+        ), patch('scraper.worker.extract_training', return_value=[training]):
+            job_id = self.create().json()['id']
+            response = self.client.post('/api/v1/admin/ingestion-jobs/' + job_id + '/run')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['status'], 'succeeded')
+        self.assertEqual(response.json()['result']['warnings'], [])
+        with self.Session() as db:
+            candidate = db.query(Candidate).filter_by(job_id=job_id).one()
+            self.assertEqual(candidate.status, 'pending')
+            self.assertEqual(db.query(Course).filter_by(title='Review-only course').count(), 0)
 
     def test_missing_credentials_block_before_job_creation(self):
         with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('main._scraper_service_status', return_value={}):

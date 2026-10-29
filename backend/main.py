@@ -1761,7 +1761,9 @@ def run_serverless_job(job_id: str, user=Depends(operator), db: Session = Depend
         if time.monotonic() - started > 180:
             raise ExtractionError('Discovery deadline reached.')
         heartbeat(job_id, {'lease_token': token}, db)
-    payload = run_job({'id': job_id, 'query': job.query, 'max_results': 1, 'lease_token': token}, renew)
+    # This route deliberately persists via complete() for operator review. It does
+    # not use the worker's separate catalogue client or automatic publication.
+    payload = run_job({'id': job_id, 'query': job.query, 'max_results': 1, 'lease_token': token}, renew, review_only=True)
     renew()
     complete(job_id, CompleteJob(**payload), db)
     db.expire_all()
