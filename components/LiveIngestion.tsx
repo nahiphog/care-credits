@@ -22,7 +22,8 @@ function isFixtureJob(job: Job | null) {
 
 export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
   const [query, setQuery] = useState('GP CPD courses Kuala Lumpur');
-  const [maxResults, setMaxResults] = useState(3);
+  const [maxResults, setMaxResults] = useState(1);
+  const [sourceLimit, setSourceLimit] = useState(1);
   const [job, setJob] = useState<Job | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [candidatesLoading, setCandidatesLoading] = useState(true);
@@ -138,6 +139,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
   }
 
   useEffect(() => {
+    api('/config').then((data) => setSourceLimit(data.discovery_max_results || 1)).catch(() => {});
     loadJobs();
     loadCandidates();
     loadTopics();
@@ -220,6 +222,9 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       });
       keyRef.current = '';
       setJob(created);
+      if (created.execution_mode === 'request') {
+        setJob(await api('/admin/ingestion-jobs/' + created.id + '/run', { method: 'POST' }));
+      }
       await loadCandidates(1);
     } catch (e) {
       setError((e as Error).message);
@@ -237,7 +242,25 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
     setBusy(true);
     setError('');
     try {
-      setJob(await api('/admin/ingestion-jobs/' + job.id + '/retry', { method: 'POST' }));
+      const queued = await api('/admin/ingestion-jobs/' + job.id + '/retry', { method: 'POST' });
+      setJob(queued);
+      if (queued.execution_mode === 'request') {
+        setJob(await api('/admin/ingestion-jobs/' + queued.id + '/run', { method: 'POST' }));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runQueued() {
+    if (!job?.id) return;
+    setBusy(true);
+    setError('');
+    try {
+      setJob(await api('/admin/ingestion-jobs/' + job.id + '/run', { method: 'POST' }));
+      await loadCandidates();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -310,7 +333,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
           <input type="checkbox" checked={forceScrape} onChange={(e) => setForceScrape(e.target.checked)} />{' '}
           Re-queue idle interrupted/failed/partial jobs (force; never succeeded)
         </label>{' '}
-        <button className="secondary" type="button" disabled={scrapeBusy || !liveReady || statusLoading} onClick={queueDaily}>
+        <button className="secondary" type="button" disabled={sourceLimit === 1 || scrapeBusy || !liveReady || statusLoading} onClick={queueDaily}>
           {scrapeBusy ? 'Queuing…' : 'Queue daily scrape'}
         </button>
         {scrapeResult ? (
@@ -391,7 +414,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
               keyRef.current = '';
             }}
           >
-            {[1, 2, 3, 4, 5].map((n) => (
+            {Array.from({ length: sourceLimit }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -400,18 +423,23 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
         </label>
         <button className="primary" disabled={busy || !liveReady || statusLoading}>
           {busy ? <Loader2 className="spin" size={16} /> : null}
-          {busy ? 'Queuing…' : 'Start bounded discovery'}
+          {busy ? 'Discovering…' : 'Start bounded discovery'}
         </button>
       </form>
       <p className="empty-copy">
         {liveReady
-          ? 'One Search and, if URLs return, one Extract for up to five pages. Doctor search never calls Tavily. Live jobs spend operator credits; fixture queue items do not.'
+          ? `One Search and, if URLs return, one Extract for up to ${sourceLimit} source page(s). Doctor search never calls Tavily. Live jobs spend operator credits.`
           : 'Live discovery stays off until Tavily and the open-weight model are ready. Claim returns 204 not_ready so queued jobs stay idle without spend. Review the fixture queue without spending credits.'}
       </p>
       {error && (
         <p role="alert" className="alert">
           {error}
         </p>
+      )}
+      {job?.status === 'queued' && job.execution_mode === 'request' && (
+        <button className="secondary" type="button" disabled={busy || !liveReady} onClick={runQueued}>
+          Run queued discovery
+        </button>
       )}
       {job && (
         <div className="empty-copy" data-testid="live-job-status">

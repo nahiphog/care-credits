@@ -1,0 +1,14 @@
+.env*
+!.env.sample
+.venv
+.data
+.agents
+.codex
+.sites-runtime
+.next
+frontend
+outputs
+work
+__pycache__
+*.db
+*.pyc

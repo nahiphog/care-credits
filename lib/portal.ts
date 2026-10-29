@@ -105,6 +105,7 @@ export type TavilySource = {
 };
 
 export type Job = {
+  execution_mode?: 'request' | 'worker';
   id: string;
   query: string;
   status: string;

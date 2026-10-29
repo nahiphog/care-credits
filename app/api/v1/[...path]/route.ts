@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiErrorBody, envelopeHeaders, notFoundBody, unavailableBody, type ApiErrorBody } from '@/lib/apiEnvelope';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 function backendBase() {
   return (process.env.BACKEND_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');

@@ -354,6 +354,10 @@ def _add_digest_backoff(db):
 
 @asynccontextmanager
 async def lifespan(app):
+    if os.getenv('SERVERLESS_MODE') == 'true':
+        # Schema is migrated explicitly before deploy; concurrent cold starts must not run DDL.
+        yield
+        return
     initialize()
     import asyncio
 
@@ -737,6 +741,7 @@ def job_json(job):
         'created_at': job.created_at,
         'max_results': job.max_results,
         'attempt': job.attempt,
+        'execution_mode': 'request' if os.getenv('SERVERLESS_MODE') == 'true' else 'worker',
         'result': result,
     }
 
@@ -833,6 +838,7 @@ def config():
         'demo': os.getenv('DEMO_MODE') == 'true',
         'signup_enabled': os.getenv('ALLOW_SIGNUP') == 'true',
         'oauth_google': google_oauth(),
+        'discovery_max_results': 1 if os.getenv('SERVERLESS_MODE') == 'true' else 5,
     }
 
 
@@ -845,6 +851,16 @@ def _env_int_value(raw):
 
 
 def _scraper_service_status():
+    if os.getenv('SERVERLESS_MODE') == 'true':
+        from scraper.extraction import configuration, ExtractionError
+        try:
+            configuration()
+            model_ready = True
+        except ExtractionError:
+            model_ready = False
+        tavily = bool((os.getenv('TAVILY_API_KEY') or '').strip())
+        return {'status': 'ready' if model_ready and tavily else 'not_ready',
+                'reachable': True, 'tavily_configured': tavily, 'model_ready': model_ready}
     base = (os.getenv('SCRAPER_HEALTH_URL') or '').strip().rstrip('/')
     if not base:
         return {'status': 'unconfigured', 'reachable': False, 'tavily_configured': False, 'model_ready': False}
@@ -1697,6 +1713,8 @@ def admin_audit(page: int = 1, page_size: int = 20, user=Depends(operator), db: 
 @app.post('/api/v1/admin/ingestion-jobs', status_code=202)
 def create_job(body: NewJob, request: Request, user=Depends(operator), db: Session = Depends(get_db)):
     _reject_tavily_spend_without_model()
+    if os.getenv('SERVERLESS_MODE') == 'true' and body.max_results != 1:
+        raise HTTPException(422, 'Serverless discovery supports one source per run.')
     key = request.headers.get('Idempotency-Key', '')
     if not 8 <= len(key) <= 100:
         raise HTTPException(422, 'Supply an Idempotency-Key of 8–100 characters.')
@@ -1715,6 +1733,39 @@ def create_job(body: NewJob, request: Request, user=Depends(operator), db: Sessi
         db.rollback()
         raise HTTPException(409, 'Request already received; refresh jobs.')
     return job_json(job)
+
+
+@app.post('/api/v1/admin/ingestion-jobs/{job_id}/run')
+def run_serverless_job(job_id: str, user=Depends(operator), db: Session = Depends(get_db)):
+    if os.getenv('SERVERLESS_MODE') != 'true':
+        raise HTTPException(404, 'Request-based discovery is not enabled.')
+    _reject_tavily_spend_without_model()
+    expire_jobs(db)
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, 'Job not found.')
+    if job.status in ('succeeded', 'partial', 'failed'):
+        return job_json(job)
+    if job.max_results != 1:
+        raise HTTPException(422, 'Create a new job with one source.')
+    token = secrets.token_urlsafe(24)
+    claimed = db.execute(update(Job).where(Job.id == job_id, Job.status == 'queued').values(
+        status='running', lease_token=token, lease_until=time.time()+120, started_at=time.time()))
+    db.commit()
+    if claimed.rowcount != 1:
+        raise HTTPException(409, 'Job already running or requires an explicit retry.')
+    from scraper.worker import run_job
+    from scraper.extraction import ExtractionError
+    started = time.monotonic()
+    def renew():
+        if time.monotonic() - started > 180:
+            raise ExtractionError('Discovery deadline reached.')
+        heartbeat(job_id, {'lease_token': token}, db)
+    payload = run_job({'id': job_id, 'query': job.query, 'max_results': 1, 'lease_token': token}, renew)
+    renew()
+    complete(job_id, CompleteJob(**payload), db)
+    db.expire_all()
+    return job_json(db.get(Job, job_id))
 
 
 def expire_jobs(db):
@@ -2442,6 +2493,8 @@ def scrape_topics(user=Depends(operator)):
 
 @app.post('/api/v1/admin/daily-scrape', status_code=202)
 def trigger_daily_scrape(force: bool = False, user=Depends(operator), db: Session = Depends(get_db)):
+    if os.getenv('SERVERLESS_MODE') == 'true':
+        raise HTTPException(409, 'Use individual bounded discovery runs on this deployment.')
     _reject_tavily_spend_without_model()
     result = enqueue_daily(db, force=force)
     if result.get('error'):

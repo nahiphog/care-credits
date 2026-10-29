@@ -52,3 +52,4 @@ __pycache__/
 !.env.sample
 /outputs/
 /work/
+/skills-lock.json
