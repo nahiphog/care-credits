@@ -593,7 +593,16 @@ class TavilySource(BaseModel):
     retrieved_at: str | None = Field(default=None, max_length=80)
 
 
+class ExtractionReceipt(BaseModel):
+    model_config = {'protected_namespaces': ()}
+    model_id: str = Field(min_length=1, max_length=200)
+    endpoint_host: str = Field(pattern=r'^[A-Za-z0-9.-]+$', max_length=253)
+    completed_at: datetime
+    candidate_count: int = Field(ge=1, le=4)
+
+
 class CompleteJob(BaseModel):
+    extractions: list[ExtractionReceipt] = Field(default_factory=list, max_length=5)
     lease_token: str = Field(min_length=1, max_length=200)
     # Dicts so optional `_judgment` survives Training validation (extra=forbid on Training).
     candidates: list[dict] = Field(default_factory=list, max_length=20)
@@ -2234,6 +2243,7 @@ def complete(job_id: str, body: CompleteJob, db: Session = Depends(get_db)):
     sources = [public_source_payload(item) for item in body.sources]
     usage = normalize_job_usage(body.usage)
     job.result = {
+        'extractions': [item.model_dump(mode='json') for item in body.extractions],
         'candidate_count': len(seen),
         'warnings': [w[:500] for w in body.warnings],
         'usage': usage,

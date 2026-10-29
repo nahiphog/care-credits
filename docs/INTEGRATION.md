@@ -14,6 +14,10 @@ For a production-style deployment, configure `.env` using `python scripts/setup_
 
 ## Hackathon live AI
 
+Live extraction now requires explicit MODEL_ID, MODEL_BASE_URL, MODEL_API_KEY, MODEL_WEIGHTS_URL and MODEL_LICENSE_URL plus MODEL_OPEN_WEIGHT_CONFIRMED=true. The development runner no longer injects provisional identities. Publisher/host labels are optional metadata; the actual endpoint hostname is recorded independently. The operator job view displays successful source-validated extraction receipts with requested model, endpoint hostname, timestamp and candidate count. Receipts are scraper-reported evidence, not independent provider attestation. Fixtures never display a live success label. Existing candidate review and source links remain alongside the receipts.
+
+The approved bounded live verification could not run because MODEL_API_KEY and TAVILY_API_KEY are absent locally. Configure them privately with scripts/setup_integrations.py, restart services, then enqueue one job with max_results=1 in the operator workspace. Review its receipt and candidate before publishing. Do not claim the demo used NVIDIA until this succeeds.
+
 The suggested model is NVIDIA Nemotron 3 Super on Nebius Token Factory, ID `nvidia/nemotron-3-super-120b-a12b`. Configure MODEL_API_KEY and TAVILY_API_KEY privately using the setup script, confirm the model's licence and open weights, and inspect operator integration status. Suggested identity is not proof of a live call. Execute a bounded discovery job, review source evidence, publish a candidate, find it as a doctor, record attendance and confirm progress changes.
 
 Before submission: verify that live sequence, deploy the application, record a public video under three minutes, describe changes made during the submission period, and provide platform feedback. An open-source licence for the combined work still needs agreement from the original code owners; this import does not invent a licence grant for their contributions.

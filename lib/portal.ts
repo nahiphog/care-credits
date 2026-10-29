@@ -111,6 +111,7 @@ export type Job = {
   max_results?: number;
   attempt?: number;
   result: {
+    extractions?: { model_id: string; endpoint_host: string; completed_at: string; candidate_count: number }[];
     warnings?: string[];
     candidate_count?: number;
     extraction_status?: string;

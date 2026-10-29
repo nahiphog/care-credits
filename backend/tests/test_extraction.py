@@ -405,7 +405,7 @@ class ModelTests(unittest.TestCase):
             with self.assertRaises(ExtractionError):
                 configuration()
 
-    def test_open03_defaults_fill_blank_identity_and_caps(self):
+    def test_blank_identity_fails_even_with_default_caps(self):
         from scraper.extraction import configuration, model_caps
         blank = {
             'MODEL_ID': '',
@@ -416,7 +416,8 @@ class ModelTests(unittest.TestCase):
             'MODEL_MAX_OUTPUT_TOKENS': '',
         }
         with patch.dict(os.environ, blank, clear=False):
-            self.assertEqual(configuration(), 'https://api.tokenfactory.nebius.com/v1')
+            with self.assertRaises(ExtractionError):
+                configuration()
             self.assertEqual(model_caps(), (12000, 4000))
 
     def test_run_job_tavily_timeout_is_failed(self):

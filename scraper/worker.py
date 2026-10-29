@@ -307,6 +307,7 @@ def run_job(job, heartbeat, client=None):
         return {
             'lease_token': job['lease_token'],
             'candidates': complete_candidates,
+            'extractions': model_usage.get('extractions', []),
             'sources': public_sources(sources),
             'warnings': soft_warnings + warnings,
             'status': 'partial' if warnings else 'succeeded',
@@ -323,6 +324,7 @@ def run_job(job, heartbeat, client=None):
         return {
             'lease_token': job['lease_token'], 'candidates': [], 'sources': public_sources(sources),
             'warnings': soft_warnings + [str(exc)], 'status': 'failed',
+            'extractions': model_usage.get('extractions', []),
             # Keep any reported Tavily/model usage from the attempt; never invent spend.
             'usage': {
                 'tavily_credits': tavily_credits,

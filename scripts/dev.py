@@ -238,7 +238,7 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     owner = {k: v for k, v in dotenv_values(root / '.env').items() if v is not None}
-    settings = apply_provisional_model(dict(owner))
+    settings = dict(owner)
     health_preferred = int(settings.get('SCRAPER_HEALTH_PORT') or os.getenv('SCRAPER_HEALTH_PORT') or 8002)
     ports, held_ports = reserve_local_ports(args.backend_port, args.frontend_port, health_preferred)
     backend_port, frontend_port, health_port = ports

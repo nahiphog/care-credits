@@ -421,6 +421,20 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
             {job.result?.usage?.model_tokens != null ? ` · ${job.result.usage.model_tokens} reported model tokens` : ''}
           </p>
           {jobPollFailed ? (
+            <p role="status">Showing the last recorded execution details.</p>
+          ) : null}
+          <section aria-label="AI extraction details">
+            <h3>AI extraction details</h3>
+            {fixtureJob ? <p>Fictional fixture — no live model call.</p> : job.result?.extractions?.length ? (
+              <ul>{job.result.extractions.map((run, index) => <li key={index}>
+                <strong>Successful live extraction (reported by scraper)</strong><br />
+                Model: {run.model_id} · Endpoint: {run.endpoint_host}<br />
+                Completed: {run.completed_at} · Source-supported candidates: {run.candidate_count}
+              </li>)}</ul>
+            ) : <p>No successful live extraction recorded for this job.</p>}
+            <p>Supporting sources and reviewable candidates appear below. This records the requested model, not independent provider attestation.</p>
+          </section>
+          {jobPollFailed ? (
             <p className="empty-copy" data-testid="live-job-poll-failed">
               Couldn't refresh job status. Last known status is shown above.{' '}
               <button className="text-link" type="button" onClick={() => refreshJobStatus()}>
