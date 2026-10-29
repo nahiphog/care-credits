@@ -5,6 +5,14 @@ node_modules
 frontend
 .env
 .env.local
+.env.*
+!.env.sample
+.data
+.agents
+.codex
+.sites-runtime
+outputs
+work
 *.db
 __pycache__
 dist

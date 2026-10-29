@@ -8,6 +8,8 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "sqlite:///./carecredit.db"
 )
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = "postgresql://" + SQLALCHEMY_DATABASE_URL[len("postgres://"):]
 
 # SQLite requires this argument when used with async/multi-threaded contexts
 connect_args = (
