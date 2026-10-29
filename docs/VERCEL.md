@@ -33,7 +33,7 @@ TAVILY_API_KEY are configured privately. Select the supported NVIDIA model on
 Nebius explicitly; no successful live run is claimed without a recorded receipt.
 Model/Tavily usage is separate from free hosting quotas.
 
-Production uses `https://care-credits-daily-gattai.vercel.app`. Set
+Production uses `https://care-credits-omega.vercel.app`. Set
 `ALLOWED_ORIGINS`, `PUBLIC_FRONTEND_BASE`, and `PUBLIC_API_BASE` explicitly to
 that origin: service-scoped Vercel host variables can describe the internal
 backend rather than the public frontend. Keep preview authentication enabled;
@@ -57,3 +57,26 @@ Production builds use `npm run build:demo`, not the legacy Sites build script.
 
 Free hosting has quotas and Vercel Hobby is limited to personal non-commercial
 use. Do not enable a Pro trial, paid compute, or a paid Neon plan automatically.
+
+## Verified deployment — 29 October 2026
+
+Production branch: `codex/v1-integrated-demo`. Live model and Tavily credentials
+are configured as Vercel production Secrets, never in source control.
+
+The public production smoke test passed signup/login, secure cookies, doctor
+role restrictions, persisted profile and attendance records, progress, CSV export,
+certificate rendering, and logout. Its temporary account and course were removed.
+Four bounded-job unit tests passed, including duplicate execution prevention.
+
+Live job `c17a4923f36640bf9cd5d303a13fd7b3` fetched `https://cpdonline.my`
+through Tavily and extracted four candidates with
+`nvidia/nemotron-3-super-120b-a12b` on `api.tokenfactory.nebius.com`.
+The saved extraction receipt is dated `2026-10-29T15:21:54.865455Z` and reports
+3,120 model tokens. Tavily did not report a credit count; it is unknown, not zero.
+The result is `partial` because the optional Jev decide/save service is absent;
+the four candidates await operator review and were not automatically published.
+Calling the terminal job again returned its saved result. The temporary evidence
+account's password was randomized and its sessions and operator role revoked.
+
+The owner's confirmed account has operator access. Email delivery and Google
+OAuth remain unconfigured; automatic scheduled jobs remain disabled.
