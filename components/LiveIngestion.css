@@ -56,7 +56,10 @@
 .ingestion-panel .ingestion-advanced .empty-copy { padding: 12px; background: #f8fafc; border-radius: 8px; }
 .ingestion-panel [data-testid="live-daily-scrape"] label { flex-direction: row; align-items: flex-start; margin-bottom: 12px; }
 .dash .dashboard-grid:has(.ingestion-panel) > .right-column { display: contents; }
+.dash .dashboard-grid:has(.ingestion-panel) { grid-template-columns: minmax(0,1fr); }
 .dash .ingestion-panel { grid-column: 1 / -1; }
+.dash:has(.ingestion-panel) .main { min-width: 0; }
+.dash:has(.ingestion-panel) .topbar { overflow-x: auto; }
 @media(max-width:1000px) {
   .ingestion-panel .ingestion-form { grid-template-columns: minmax(0,1fr) 110px; }
   .ingestion-panel .ingestion-form > button { grid-column: 1 / -1; justify-self: start; }
