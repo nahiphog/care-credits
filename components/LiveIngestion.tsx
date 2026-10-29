@@ -363,7 +363,10 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
           <ul>
             {jobs.slice(0, 8).map((item) => (
               <li key={item.id}>
-                {item.status} · {item.query}
+                <button type="button" className="ingestion-run" aria-pressed={job?.id === item.id}
+                  disabled={busy} onClick={() => { setJob(item); refreshJobStatus(item.id); }}>
+                  <span>{item.query}</span><span className="ingestion-status">{item.status}</span>
+                </button>
               </li>
             ))}
           </ul>
