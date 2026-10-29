@@ -33,11 +33,12 @@ TAVILY_API_KEY are configured privately. Select the supported NVIDIA model on
 Nebius explicitly; no successful live run is claimed without a recorded receipt.
 Model/Tavily usage is separate from free hosting quotas.
 
-Production uses `https://care-credits-omega.vercel.app`. Set
+Production uses `https://care-credits-hackathon.vercel.app`. Set
 `ALLOWED_ORIGINS`, `PUBLIC_FRONTEND_BASE`, and `PUBLIC_API_BASE` explicitly to
 that origin: service-scoped Vercel host variables can describe the internal
 backend rather than the public frontend. Keep preview authentication enabled;
 the production domain is public with Standard Protection.
+The former `care-credits-omega.vercel.app` domain redirects to this address.
 
 ## Owner access and email
 
