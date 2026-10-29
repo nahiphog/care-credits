@@ -80,7 +80,7 @@ export default function LiveSearch() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [deliveryMode, setDeliveryMode] = useState('');
-  const [period, setPeriod] = useState('upcoming');
+  const [period, setPeriod] = useState('all');
   const [difficulty, setDifficulty] = useState('');
   const [maxFee, setMaxFee] = useState('');
   const [minPoints, setMinPoints] = useState('');
@@ -172,7 +172,7 @@ export default function LiveSearch() {
     city: '',
     state: '',
     mode: '',
-    period: 'upcoming',
+    period: 'all',
     difficulty: '',
     maxFee: '',
     minPoints: '',
@@ -458,7 +458,7 @@ export default function LiveSearch() {
     void loadLearning(learningFilter, learningPage);
   }
 
-  async function loadWorkspace(nextCity = city, nextState = state) {
+  async function loadWorkspace(nextCity = appliedSearch.current.city, nextState = appliedSearch.current.state) {
     const workspaceId = ++workspaceRequest.current;
     setLoading(true);
     setSuggestionsBusy(true);
@@ -639,10 +639,9 @@ export default function LiveSearch() {
 
   useEffect(() => {
     if (!user) return;
-    const nextCity = city || user.city || '';
-    const nextState = state || user.state || '';
-    if (!city && user.city) setCity(user.city);
-    if (!state && user.state) setState(user.state);
+    // Profile location must not silently restrict the catalogue on login/reload.
+    const nextCity = appliedSearch.current.city;
+    const nextState = appliedSearch.current.state;
     setSuggestionsBusy(true);
     setLoading(true);
     loadWorkspace(nextCity, nextState).catch((e) => {
@@ -719,7 +718,7 @@ export default function LiveSearch() {
       await api('/me/trainings/' + courseId, { method: 'PUT', body: JSON.stringify(edit) });
       // Persist succeeded — refresh workspace (incl. sequenced progress) even if the modal closed or switched.
       // Do not naked-setProgress here: an unsequenced year fetch can overwrite a newer year change and stick `…`.
-      await loadWorkspace(appliedSearch.current.city || user?.city || '', appliedSearch.current.state || user?.state || '');
+      await loadWorkspace();
       if (detailRequest.current !== requestId) return;
       const current = await api('/trainings/' + courseId);
       if (detailRequest.current !== requestId) return;
@@ -906,8 +905,8 @@ export default function LiveSearch() {
                   setTab(item);
                   setOpen(false);
                   if (item === 'Events' || item === 'Discover') {
-                    // Restore upcoming from committed Search filters — do not silently apply draft top-bar edits.
-                    void searchCommitted({ period: 'upcoming', page: 1 });
+                    // Navigation preserves the filters explicitly applied by the user.
+                    void searchCommitted({ page: 1 });
                   }
                 }}
               >
@@ -961,7 +960,7 @@ export default function LiveSearch() {
                   city: '',
                   state: '',
                   mode: '',
-                  period: 'upcoming',
+                  period: 'all',
                   difficulty: '',
                   maxFee: '',
                   minPoints: '',
@@ -975,7 +974,7 @@ export default function LiveSearch() {
                 setCity('');
                 setState('');
                 setDeliveryMode('');
-                setPeriod('upcoming');
+                setPeriod('all');
                 setDifficulty('');
                 setMaxFee('');
                 setMinPoints('');
@@ -1299,7 +1298,7 @@ export default function LiveSearch() {
                 {user.role === 'operator' && (
                   <LiveIngestion
                     onPublished={async () => {
-                      await loadWorkspace(city || user.city || '');
+                      await loadWorkspace();
                     }}
                   />
                 )}
