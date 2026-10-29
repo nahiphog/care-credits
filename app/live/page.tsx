@@ -89,6 +89,7 @@ export default function LiveSearch() {
   const [includeUnknown, setIncludeUnknown] = useState(false);
   const [radius, setRadius] = useState('25');
   const [page, setPage] = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [nearby, setNearby] = useState<{ latitude: number; longitude: number } | null>(null);
   const [year, setYear] = useState(() => calendarYearLocal());
   const [courses, setCourses] = useState<Course[]>([]);
@@ -528,14 +529,31 @@ export default function LiveSearch() {
     }
   }
 
+  const applied = appliedSearch.current;
+  const filterChips: { key: string; label: string; remove: () => void }[] = [];
+  const addChip = (key: string, label: string, remove: () => void) => filterChips.push({ key, label, remove });
+  if (applied.query) addChip('query', `Search: ${applied.query}`, () => { searchCommitted({ query: '' }); });
+  if (applied.city) addChip('city', applied.city, () => { searchCommitted({ city: '' }); });
+  if (applied.state) addChip('state', applied.state, () => { searchCommitted({ state: '' }); });
+  if (applied.mode) addChip('mode', applied.mode.replace('_', ' '), () => { searchCommitted({ mode: '' }); });
+  if (applied.period !== 'all') addChip('period', applied.period, () => { searchCommitted({ period: 'all' }); });
+  if (applied.difficulty) addChip('difficulty', applied.difficulty, () => { searchCommitted({ difficulty: '' }); });
+  if (applied.maxFee) addChip('fee', `Up to MYR ${applied.maxFee}`, () => { searchCommitted({ maxFee: '' }); });
+  if (applied.minPoints) addChip('points', `${applied.minPoints}+ points`, () => { searchCommitted({ minPoints: '' }); });
+  if (applied.dateFrom) addChip('from', `From ${applied.dateFrom}`, () => { searchCommitted({ dateFrom: '' }); });
+  if (applied.dateTo) addChip('to', `Until ${applied.dateTo}`, () => { searchCommitted({ dateTo: '' }); });
+  if (applied.includeUnknown) addChip('unknown', 'Include unconfirmed details', () => { searchCommitted({ includeUnknown: false }); });
+  if (applied.nearby) addChip('nearby', `Within ${applied.radius} km`, () => { searchCommitted({ nearby: null }); });
+  const activeFilterCount = filterChips.filter((chip) => chip.key !== 'query').length;
+
   function clearFilters() {
-    const nextCity = user?.city || '';
-    const nextState = user?.state || '';
+    const nextCity = '';
+    const nextState = '';
     setQuery('');
     setCity(nextCity);
     setState(nextState);
     setDeliveryMode('');
-    setPeriod('upcoming');
+    setPeriod('all');
     setDifficulty('');
     setMaxFee('');
     setMinPoints('');
@@ -550,7 +568,7 @@ export default function LiveSearch() {
       city: nextCity,
       state: nextState,
       mode: '',
-      period: 'upcoming',
+      period: 'all',
       difficulty: '',
       maxFee: '',
       minPoints: '',
@@ -573,7 +591,7 @@ export default function LiveSearch() {
         const next = { latitude: position.coords.latitude, longitude: position.coords.longitude };
         setNearby(next);
         // Page commits inside search() only after a successful load.
-        search({ nearby: next, page: 1 });
+        // Location is a draft filter until Apply filters is pressed.
       },
       () => setError('Location was not available. You can still search by city or state.'),
       { timeout: 10000 },
@@ -986,134 +1004,14 @@ export default function LiveSearch() {
             <button className="menu-button" onClick={() => setOpen(true)} aria-label="Open navigation">
               <Menu />
             </button>
-            <form
-              id="live-filters"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setTab('Discover');
-                search({ page: 1 });
-              }}
-            >
+            <form className="catalogue-search" role="search" aria-label="Search catalogue" onSubmit={(event) => {
+              event.preventDefault(); setTab('Discover'); searchCommitted({ query, page: 1 });
+            }}>
               <label className="search">
                 <Search aria-hidden="true" />
-                <input
-                  aria-label="Search training"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search conferences, webinars, workshops..."
-                />
+                <input aria-label="Search training" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the training catalogue" />
               </label>
-              <input
-                className="city-search"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Kuala Lumpur"
-                aria-label="City"
-              />
-              <input
-                className="city-search"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                placeholder="Selangor"
-                aria-label="State"
-              />
-              <label className="city-search">
-                <select
-                  aria-label="Delivery mode"
-                  value={deliveryMode}
-                  onChange={(e) => setDeliveryMode(e.target.value)}
-                >
-                  <option value="">Any mode</option>
-                  <option value="online">Online</option>
-                  <option value="in_person">In person</option>
-                  <option value="hybrid">Hybrid</option>
-                </select>
-              </label>
-              <label className="city-search">
-                <select aria-label="Period" value={period} onChange={(e) => setPeriod(e.target.value)}>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="all">All dates</option>
-                  <option value="past">Past</option>
-                </select>
-              </label>
-              <label className="city-search">
-                <select aria-label="Difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-                  <option value="">Any level</option>
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </label>
-              <input
-                className="city-search"
-                type="number"
-                min="0"
-                step="1"
-                value={maxFee}
-                onChange={(e) => setMaxFee(e.target.value)}
-                placeholder="Max fee MYR"
-                aria-label="Maximum fee in MYR"
-              />
-              <input
-                className="city-search"
-                type="number"
-                min="0"
-                step="0.1"
-                value={minPoints}
-                onChange={(e) => setMinPoints(e.target.value)}
-                placeholder="Min points"
-                aria-label="Minimum advertised points"
-              />
-              <input
-                className="city-search"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                aria-label="From date"
-              />
-              <input
-                className="city-search"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                aria-label="To date"
-              />
-              {nearby ? (
-                <label className="city-search">
-                  <select aria-label="Search radius" value={radius} onChange={(e) => setRadius(e.target.value)}>
-                    {[10, 25, 50, 100].map((km) => (
-                      <option key={km} value={km}>
-                        {km} km
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <label className="city-search check-row">
-                <input
-                  type="checkbox"
-                  checked={includeUnknown}
-                  onChange={(e) => setIncludeUnknown(e.target.checked)}
-                  aria-label="Include date not confirmed and unknown fees or points"
-                />
-                <span>Include date not confirmed and unknown fees or points</span>
-              </label>
-              <button className="search-btn" disabled={loading}>
-                {loading ? <Loader2 className="spin" size={16} /> : 'Search'}
-              </button>
-              <button
-                className="text-link"
-                type="button"
-                onClick={() => {
-                  setTab('Discover');
-                  locateNearby();
-                }}
-              >
-                Near me
-              </button>
-              <button className="text-link" type="button" onClick={clearFilters}>
-                Clear filters
-              </button>
+              <button className="search-btn" disabled={loading}>{loading ? 'Searching...' : 'Search'}</button>
             </form>
             <div className="top-actions">
               <span className="avatar" title={user.name} aria-label={user.name}>
@@ -1289,6 +1187,38 @@ export default function LiveSearch() {
                           : `${total} event${total === 1 ? '' : 's'}`}
                     </p>
                   </div>
+                  <div className="catalogue-tools">
+                    <p>Search published training. AI discovery and candidate review are separate below.</p>
+                    <button type="button" className="filter-toggle" aria-expanded={filtersOpen} aria-controls="catalogue-filter-panel" onClick={() => setFiltersOpen(!filtersOpen)}>
+                      Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                    </button>
+                  </div>
+                  <div className="filter-chips" aria-label="Applied filters">
+                    {filterChips.map((chip) => <button key={chip.key} type="button" disabled={loading} onClick={chip.remove} aria-label={`Remove ${chip.label} filter`}>{chip.label}<X size={14} aria-hidden="true" /></button>)}
+                    {filterChips.length > 0 && <button type="button" className="clear-filters" disabled={loading} onClick={clearFilters}>Clear all</button>}
+                  </div>
+                  {filtersOpen && <form id="catalogue-filter-panel" className="catalogue-filter-panel" onSubmit={(event) => { event.preventDefault(); search({ page: 1 }); }}>
+                    <p className="filter-help">Adjust your filters, then apply them to update the results.</p>
+                    <fieldset><legend>Location</legend><div className="filter-fields">
+                      <label>City<input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Any city" /></label>
+                      <label>State<input value={state} onChange={(e) => setState(e.target.value)} placeholder="Any state" /></label>
+                    </div>
+                    <div className="nearby-controls"><button type="button" className="filter-toggle" onClick={locateNearby}>Use my location</button>
+                    {nearby && <><label>Search radius<select value={radius} onChange={(e) => setRadius(e.target.value)}>{[10,25,50,100].map((km) => <option key={km} value={km}>{km} km</option>)}</select></label><span>Location ready. Apply filters to search nearby.</span><button type="button" className="text-link" onClick={() => setNearby(null)}>Remove location</button></>}
+                    </div></fieldset>
+                    <fieldset><legend>Format &amp; dates</legend><div className="filter-fields">
+                      <label>Delivery mode<select value={deliveryMode} onChange={(e) => setDeliveryMode(e.target.value)}><option value="">Any mode</option><option value="online">Online</option><option value="in_person">In person</option><option value="hybrid">Hybrid</option></select></label>
+                      <label>Period<select value={period} onChange={(e) => setPeriod(e.target.value)}><option value="upcoming">Upcoming</option><option value="all">All dates</option><option value="past">Past</option></select></label>
+                      <label>From date<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
+                      <label>To date<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
+                      <label>Difficulty<select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}><option value="">Any level</option><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
+                    </div></fieldset>
+                    <fieldset><legend>Cost &amp; credits</legend><div className="filter-fields">
+                      <label>Maximum fee (MYR)<input type="number" min="0" step="1" value={maxFee} onChange={(e) => setMaxFee(e.target.value)} placeholder="No maximum" /></label>
+                      <label>Minimum advertised points<input type="number" min="0" step="0.1" value={minPoints} onChange={(e) => setMinPoints(e.target.value)} placeholder="No minimum" /></label>
+                    </div><label className="filter-check"><input type="checkbox" checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.target.checked)} />Include courses with unconfirmed dates, fees or points</label></fieldset>
+                    <div className="filter-actions"><button className="search-btn" disabled={loading}>{loading ? 'Applying...' : 'Apply filters'}</button><button type="button" className="filter-toggle" onClick={() => setFiltersOpen(false)}>Close filters</button></div>
+                  </form>}
                   {loading ? (
                     <p className="empty-copy" role="status" aria-busy="true" data-testid="live-search-loading">
                       Finding your training…
