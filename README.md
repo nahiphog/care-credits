@@ -1,4 +1,10 @@
-# vinext-starter
+# Care Credits — integrated V1 demo
+
+The functional doctor dashboard is `/v1`; operator tools are at `/workspace`. Backend, scraper and PostgreSQL deployment configuration are included. See [integration and demo setup](docs/INTEGRATION.md) for provenance, startup instructions, NVIDIA/Nebius configuration and submission gaps. V2–V5 remain visual prototypes.
+
+Quick start: install `backend/requirements.txt` and `scraper/requirements.txt` in a Python virtual environment, run `npm ci`, then `python scripts/dev.py --demo`.
+
+## Original hosting starter documentation
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

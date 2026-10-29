@@ -8,8 +8,8 @@ const versions = [
     name: "Dashboard V1",
     eyebrow: "Current experience",
     description:
-      "The original CPD dashboard — a detailed, data-rich overview of points, categories, events, and recommendations.",
-    tags: ["Category breakdown", "Event feed", "Compliance score"],
+      "The connected CPD dashboard: sign in, discover courses, record attendance, and track your personal learning.",
+    tags: ["Connected demo", "Course discovery", "Learning records"],
   },
   {
     href: "/v2",

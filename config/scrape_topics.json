@@ -1,0 +1,14 @@
+[
+  {"topic_id": "afpm-cme", "priority": 1, "category": "association", "cadence": "weekly", "query": "site:afpm.org.my CME OR CPD OR \"continuing professional\"", "max_results": 5},
+  {"topic_id": "mma-cpd", "priority": 1, "category": "association", "cadence": "weekly", "query": "site:mma.org.my CPD OR CME OR conference Malaysia", "max_results": 5},
+  {"topic_id": "afpm-courses", "priority": 1, "category": "association", "cadence": "weekly", "query": "\"Academy of Family Physicians Malaysia\" CME OR CPD course", "max_results": 5},
+  {"topic_id": "fms-conference", "priority": 2, "category": "conference", "cadence": "weekly", "query": "\"Family Medicine Scientific Conference\" Malaysia CPD", "max_results": 5},
+  {"topic_id": "sunway-cme", "priority": 2, "category": "hospital", "cadence": "weekly", "query": "site:sunwaymedical.com CME OR CPD OR symposium", "max_results": 5},
+  {"topic_id": "gleneagles-cme", "priority": 2, "category": "hospital", "cadence": "weekly", "query": "site:gleneagles.com.my CME OR \"continuous medical\" OR workshop", "max_results": 5},
+  {"topic_id": "pjh-princecourt", "priority": 2, "category": "hospital", "cadence": "weekly", "query": "site:pjh.com.my OR \"Prince Court\" CME Malaysia doctors", "max_results": 5},
+  {"topic_id": "kl-selangor-gp", "priority": 1, "category": "regional", "cadence": "weekly", "query": "GP CPD courses Kuala Lumpur OR Selangor medical training", "max_results": 3},
+  {"topic_id": "my-online-cme", "priority": 1, "category": "online", "cadence": "weekly", "query": "Malaysia medical CPD webinar OR \"online CME\" doctors 2026", "max_results": 5},
+  {"topic_id": "moh-primary-care", "priority": 1, "category": "government", "cadence": "weekly", "query": "\"Ministry of Health\" Malaysia CPD OR CME primary care conference", "max_results": 5},
+  {"topic_id": "mma-scientific", "priority": 2, "category": "association", "cadence": "weekly", "query": "\"Malaysian Medical Association\" scientific meeting CPD", "max_results": 5},
+  {"topic_id": "uni-primary-care", "priority": 2, "category": "university", "cadence": "weekly", "query": "\"Universiti Malaya\" OR \"UKM\" OR \"USM\" CME primary care GP", "max_results": 5}
+]

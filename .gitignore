@@ -42,5 +42,13 @@ next-env.d.ts
 /.sites-runtime/
 /.agents/
 /.codex/
+/.venv/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+*.db
+/.data/
+/frontend/
+!.env.sample
 /outputs/
 /work/
