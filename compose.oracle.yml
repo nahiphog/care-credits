@@ -1,0 +1,37 @@
+# Apply with: docker compose --env-file .env.oracle -f docker-compose.yml -f compose.oracle.yml up -d --build
+services:
+  postgres:
+    restart: unless-stopped
+  backend:
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEMO_MODE: "false"
+      ALLOW_SIGNUP: "true"
+      ALLOWED_ORIGINS: https://${SITE_HOST:?Set SITE_HOST to your public hostname}
+      PUBLIC_FRONTEND_BASE: https://${SITE_HOST}
+      PUBLIC_API_BASE: https://${SITE_HOST}
+      DAILY_SCRAPE_ENABLED: ${DAILY_SCRAPE_ENABLED:-false}
+      DIGEST_ENABLED: ${DIGEST_ENABLED:-false}
+  scraper:
+    restart: unless-stopped
+  frontend:
+    restart: unless-stopped
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SITE_HOST: ${SITE_HOST:?Set SITE_HOST to your public hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+volumes:
+  caddy_data:
+  caddy_config:
