@@ -27,7 +27,7 @@ def check(response, status=200):
 
 try:
     with httpx.Client(base_url=base, timeout=90, headers={'Origin': base, 'X-Care-Client': '1'}) as client:
-        check(client.get('/v1'))
+        check(client.get('/'))
         assert check(client.get('/api/v1/config')).json()['signup_enabled']
         check(client.post('/api/v1/auth/register', json={'email': email, 'password': password, 'name': 'Deployment Test'}), 201)
         login = check(client.post('/api/v1/auth/login', json={'email': email, 'password': password}))

@@ -39,10 +39,12 @@ that origin: service-scoped Vercel host variables can describe the internal
 backend rather than the public frontend. Keep preview authentication enabled;
 the production domain is public with Standard Protection.
 The former `care-credits-omega.vercel.app` domain redirects to this address.
+The dashboard loads directly at `/`. Legacy `/v1`–`/v5` and `/live` paths
+redirect to `/`; no version picker or version labels are shown to visitors.
 
 ## Owner access and email
 
-Register an account through `/v1`; an administrator must then promote the owner's
+Register an account through `/`; an administrator must then promote the owner's
 specific account to operator using the database management command documented
 in `docs/RENDER.md`. Do not auto-promote by email on unauthenticated signup.
 Google OAuth and delivered email digests need their own credentials and are not

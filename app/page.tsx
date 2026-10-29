@@ -1,5 +1,3 @@
-import { redirect } from 'next/navigation';
+import './live/dash.css';
 
-export default function Home() {
-  redirect('/v1');
-}
+export { default } from './live/page';
