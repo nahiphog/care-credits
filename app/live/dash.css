@@ -63,16 +63,16 @@
 
 /* Modal filters, with native focus containment and Escape support. */
 .dash .catalogue-search > .filter-toggle { flex-shrink: 0; white-space: nowrap; }
-.dash .filter-dialog { box-sizing: border-box; width: min(660px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #dce6f3; border-radius: 18px; background: #fff; color: #193456; box-shadow: 0 24px 80px #10245440; }
+.dash .filter-dialog { margin: auto; box-sizing: border-box; width: min(660px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #dce6f3; border-radius: 18px; background: #fff; color: #193456; box-shadow: 0 24px 80px #10245440; }
 .dash .filter-dialog::backdrop { background: #10245480; backdrop-filter: blur(3px); }
 .dash .filter-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px; position: sticky; top: 0; background: #fff; z-index: 1; border-bottom: 1px solid #dce6f3; }
 .dash .filter-dialog-heading h2 { margin: 0; font-size: 22px; }
 .dash .filter-dialog .catalogue-filter-panel { margin: 0; border: 0; border-radius: 0; }
-.dash .filter-dialog .filter-actions { position: sticky; bottom: -20px; background: #f8fbff; padding: 14px 0; }
+.dash .filter-dialog .filter-actions { position: sticky; bottom: 0; background: #f8fbff; padding: 14px 0; }
 @media(max-width:580px) {
   .dash .topbar .catalogue-search { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
   .dash .catalogue-search .search { grid-column: 1 / -1; width: 100%; }
   .dash .catalogue-search > .filter-toggle { justify-self: end; }
   .dash .filter-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
-  .dash .filter-dialog .filter-actions { bottom: -16px; }
+  .dash .filter-dialog .filter-actions { bottom: 0; }
 }
