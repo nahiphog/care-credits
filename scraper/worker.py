@@ -256,8 +256,9 @@ def run_job(job, heartbeat, client=None, *, review_only=False):
                             page_candidates = extract_training(source, usage=model_usage)
                             warnings.extend(model_usage.pop('extraction_warnings', []))
                         except ExtractionError as exc:
-                            warnings.append(str(exc) + ' Heuristic candidate held for review.')
+                            warnings.append(str(exc))
                             page_candidates = heuristic_extract(source)
+                            warnings.append('Heuristic candidate held for review.' if page_candidates else 'Heuristic fallback found no supported course; nothing queued for review.')
                             hold_for_review = True
                     else:
                         page_candidates = heuristic_extract(source)

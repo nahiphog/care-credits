@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 import httpx
+from pydantic import ValidationError
 from shared.contracts import (
     Training,
     validate_evidence,
@@ -15,6 +16,19 @@ from shared.model_defaults import env_or_provisional
 
 class ExtractionError(Exception):
     pass
+
+
+def validation_diagnostic(exc):
+    """Only report known schema fields/rules, never model values or provider bodies."""
+    if isinstance(exc, ValidationError):
+        fields = sorted({str(error['loc'][0]) if error['loc'] and error['loc'][0] in Training.model_fields
+                         else 'record' for error in exc.errors(include_input=False, include_context=False)})
+        return 'schema_invalid: ' + ', '.join(fields)
+    message = str(exc)
+    for prefix in ('Missing source evidence for ', 'Source quotation does not support '):
+        if message.startswith(prefix) and message[len(prefix):] in Training.model_fields:
+            return 'evidence_invalid: ' + message
+    return 'evidence_invalid: record failed source validation'
 
 
 # Zero-width / BiDi / BOM characters a page can hide inside otherwise clean text. Scrapling-style
@@ -647,27 +661,43 @@ def extract_training(source, client=None, usage=None):
         try:
             response = client.post(base + '/chat/completions', json=payload, headers={'Authorization': 'Bearer ' + settings['MODEL_API_KEY']})
             response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ExtractionError(f'model_http_error: HTTP {exc.response.status_code}; no extraction accepted.') from None
+        except httpx.TimeoutException:
+            raise ExtractionError('model_timeout: no response within the request deadline.') from None
+        except httpx.HTTPError:
+            raise ExtractionError('model_connection_error: provider could not be reached.') from None
+        try:
             data = response.json()
-            raw = data['choices'][0]['message']['content'].strip()
+            tokens = reported_model_tokens(data)
+            if usage is not None and tokens is not None:
+                usage['model_tokens'] = (usage.get('model_tokens') or 0) + tokens
+            choice = data['choices'][0]
+            if choice.get('finish_reason') == 'length':
+                raise ExtractionError('model_output_truncated: output token limit reached; no incomplete records accepted.')
+            raw = choice['message']['content'].strip()
             rows = _parse_llm_trainings(raw)
             if not isinstance(rows, list) or len(rows) > 4:
-                raise ValueError('Invalid candidate batch')
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError, AttributeError):
-            raise ExtractionError('Model request failed or its output lacked valid source-backed training data.') from None
-        tokens = reported_model_tokens(data)
-        if usage is not None and tokens is not None:
-            usage['model_tokens'] = (usage.get('model_tokens') or 0) + tokens
+                raise ExtractionError('model_batch_invalid: expected at most four training records.')
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+            raise ExtractionError('model_json_invalid: response did not contain a parseable training list.') from None
+        if not rows:
+            if usage is not None:
+                usage.setdefault('extraction_warnings', []).append('model_no_trainings: model returned an empty list; no supported course was identified on this page.')
+            return []
         scrape_week = week_key_for_date(None)
         single = len(rows) <= 1
         result = []
         discarded = 0
+        failures = []
         # Per-item resilience (Firecrawl pattern): on a multi-session page one malformed session must
         # not discard the valid ones. A single-row page keeps the strict all-or-nothing contract.
-        for row in rows:
+        for index, row in enumerate(rows, 1):
             if not isinstance(row, dict):
                 if single:
-                    raise ExtractionError('Model request failed or its output lacked valid source-backed training data.') from None
+                    raise ExtractionError('schema_invalid: training record must be an object.') from None
                 discarded += 1
+                failures.append(f'Record {index} discarded: schema_invalid: expected an object.')
                 continue
             row.update(
                 source_url=source['url'],
@@ -682,18 +712,21 @@ def extract_training(source, client=None, usage=None):
             )
             try:
                 result.append(validate_evidence(Training(**row)).model_dump(mode='json'))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as exc:
+                reason = f'Record {index} discarded: ' + validation_diagnostic(exc)
                 if single:
-                    raise ExtractionError('Model request failed or its output lacked valid source-backed training data.') from None
+                    raise ExtractionError(reason) from None
+                failures.append(reason)
                 discarded += 1
                 continue
         if not result:
-            raise ExtractionError('Model request failed or its output lacked valid source-backed training data.') from None
+            raise ExtractionError('; '.join(failures)[:480]) from None
         if usage is not None:
             if discarded:
                 usage.setdefault('extraction_warnings', []).append(
                     f'{discarded} model candidate(s) were discarded because required fields or source evidence were invalid.'
                 )
+                usage['extraction_warnings'].extend(failures)
                 usage['discarded_candidates'] = usage.get('discarded_candidates', 0) + discarded
             usage.setdefault('extractions', []).append({
                 'model_id': settings['MODEL_ID'],

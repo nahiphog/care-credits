@@ -27,6 +27,32 @@ class ModelTests(unittest.TestCase):
             return httpx.Response(status,json={'choices':[{'message':{'content':json.dumps({'trainings':[row]})}}],'usage':{'prompt_tokens':11,'completion_tokens':19,'total_tokens':30}})
         return httpx.Client(transport=httpx.MockTransport(handler))
 
+    def test_diagnostics_distinguish_empty_truncated_and_invalid_evidence(self):
+        import json
+        cases = [
+            ([], 'stop', 'model_no_trainings'),
+            ([self.row], 'length', 'model_output_truncated'),
+            ([{**self.row, 'evidence': {}}], 'stop', 'evidence_invalid'),
+            ([{**self.row, 'mode': 'secret-model-value'}], 'stop', 'schema_invalid'),
+        ]
+        for rows, finish, expected in cases:
+            with self.subTest(expected=expected):
+                usage = {}
+                payload = {'choices': [{'finish_reason': finish, 'message': {'content': json.dumps({'trainings': rows})}}], 'usage': {'total_tokens': 42}}
+                with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200,json=payload))) as client:
+                    if rows:
+                        with self.assertRaises(ExtractionError) as caught:
+                            extract_training(self.source, client, usage)
+                        message = str(caught.exception)
+                    else:
+                        self.assertEqual(extract_training(self.source, client, usage), [])
+                        message = str(usage['extraction_warnings'])
+                self.assertIn(expected, message)
+                self.assertNotIn('secret-model-value', message)
+                self.assertNotIn('test-secret', message)
+                self.assertEqual(usage['model_tokens'],42)
+                self.assertNotIn('extractions', usage)
+
     def test_discarded_multirow_candidates_mark_run_partial(self):
         import json
         usage = {}
