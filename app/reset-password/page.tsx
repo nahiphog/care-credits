@@ -49,6 +49,6 @@ export default function PasswordRecovery() {
     </form>}
     {error && <p role="alert">{error}</p>}
     {message && <p role="status">{message}</p>}
-    <p><Link href="/">Back to sign in</Link></p>
+    <p><Link href="/log_in">Back to sign in</Link></p>
   </main>;
 }

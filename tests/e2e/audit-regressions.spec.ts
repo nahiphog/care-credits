@@ -43,6 +43,7 @@ test('expired session clears signed-in shell and provides login',async({page})=>
  await login(page);await page.route('**/api/v1/trainings?**',route=>route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({detail:'Please sign in.'})}));
  await page.getByRole('button',{name:'Search',exact:true}).click();
  await expect(page.getByRole('button',{name:'Sign in and search',exact:true})).toBeVisible();
+ await expect(page).toHaveURL(/\/log_in\?next=%2Fdiscover$/);
  await expect(page.getByRole('link',{name:'Overview',exact:true})).toHaveCount(0);
 });
 test('workspace defaults to all dates and unavailable digests cannot be enabled',async({page})=>{

@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
-async function signIn(page: Page) {
-  await page.getByLabel('Email address').fill('doctor@carecredits.local');
+async function signIn(page: Page, email = 'doctor@carecredits.local') {
+  await expect(page).toHaveURL(/\/log_in(?:\?|$)/);
+  await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill('CareCredits-demo-2026');
   await page.getByRole('button', { name: 'Sign in and search', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
@@ -36,6 +37,9 @@ test('all seven sidebar links have reloadable URLs and matching active pages', a
 
 test('direct sign-in retains Settings and history preserves search and profile drafts', async ({ page }) => {
   await page.goto('/settings');
+  await expect(page).toHaveURL(/\/log_in\?next=%2Fsettings$/);
+  await page.reload();
+  await expect(page).toHaveURL(/\/log_in\?next=%2Fsettings$/);
   await signIn(page);
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.locator('#page-heading')).toHaveText('Settings');
@@ -57,4 +61,47 @@ test('direct sign-in retains Settings and history preserves search and profile d
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page).toHaveURL(/\/discover$/);
   await expect(page.locator('#page-heading')).toHaveText('Discover');
+});
+
+test('sign-in and signup share the login URL and logout starts a fresh Overview session', async ({ page }) => {
+  // Share login coverage across demo actors without weakening the per-account rate limit.
+  await page.goto('/log_in');
+  await page.getByRole('button', { name: 'New here? Create an account', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Create your workspace', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/log_in$/);
+  await page.getByRole('button', { name: 'Already have an account? Sign in', exact: true }).click();
+  await signIn(page, 'demo@carecredits.local');
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  expect(new URL(page.url()).pathname).toBe('/');
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/log_in$/);
+  await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/log_in$/);
+  await signIn(page, 'demo@carecredits.local');
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  // An already authenticated visitor should not get another login form.
+  await page.goto('/log_in');
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  expect(new URL(page.url()).pathname).toBe('/');
+});
+
+test('login rejects an external return destination', async ({ page }) => {
+  await page.goto('/log_in?next=https%3A%2F%2Fexample.com');
+  await signIn(page, 'demo@carecredits.local');
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  expect(new URL(page.url()).pathname).toBe('/');
+});
+
+test('an unavailable session check keeps the error and retry on the requested page', async ({ page }) => {
+  await page.route('**/api/v1/me', route => route.fulfill({ status: 503, json: { detail: 'Temporarily unavailable' } }));
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: 'CareCredits is unavailable' })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings$/);
+  await page.unroute('**/api/v1/me');
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page).toHaveURL(/\/log_in\?next=%2Fsettings$/);
+  await signIn(page, 'demo@carecredits.local');
+  await expect(page.locator('#page-heading')).toHaveText('Settings');
 });

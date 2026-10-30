@@ -24,7 +24,7 @@ import { PasswordSettings } from '@/components/PasswordSettings';
 import { LiveIngestion } from '@/components/LiveIngestion';
 import { CertificatePanel } from '@/components/CertificatePanel';
 import { DateChip } from '@/components/CourseList';
-import { dashboardPageFromPath, dashboardPaths, type DashboardPage } from '@/lib/dashboard-navigation';
+import { dashboardPageFromPath, dashboardPaths, dashboardReturnPath, loginPath, loginPathFor, type DashboardPage } from '@/lib/dashboard-navigation';
 import { api, ApiError, activityLabel, AuditItem, calendarYearLocal, Course, distanceLabel, emptyRecord, formatDate, locationLabel, normalizeRecordEdit, Progress, RecordData, RecordHistoryItem, User } from '@/lib/portal';
 
 const PAGE_SIZE = 12;
@@ -303,6 +303,18 @@ export default function LiveSearch() {
         .catch((error) => { if (!(error instanceof ApiError && error.status === 401)) throw error; }),
     ]).catch((error) => setBootstrapError(error.message || 'CareCredits could not be reached.')).finally(() => setBooting(false));
   }, [bootstrapAttempt]);
+
+  useEffect(() => {
+    if (booting || bootstrapError) return;
+    // Read the current address so an explicit logout cannot reuse a stale page path.
+    const currentPath = window.location.pathname;
+    if (!user?.id && currentPath !== loginPath) {
+      window.history.replaceState(null, '', loginPathFor(currentPath));
+    } else if (user?.id && currentPath === loginPath) {
+      const next = new URLSearchParams(window.location.search).get('next');
+      window.history.replaceState(null, '', dashboardReturnPath(next));
+    }
+  }, [booting, bootstrapError, user?.id, pathname]);
 
   // AUTH-01: Google callback redirects here with oauth=denied|failed; surface the outcome.
   useEffect(() => {
@@ -770,7 +782,7 @@ export default function LiveSearch() {
       setSuggestionsBusy(true);
       setLearningBusy(true);
       setAuditBusy(true);
-      // Keep a directly opened dashboard URL after successful sign-in.
+      // The auth route effect restores the requested page, or opens Overview.
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -859,7 +871,8 @@ export default function LiveSearch() {
     }
   }
 
-  if (booting) {
+  const authRoutePending = !bootstrapError && (user ? pathname === loginPath : pathname !== loginPath);
+  if (booting || authRoutePending) {
     return (
       <div className="dash">
         <div className="gate" id="main-content">
@@ -1010,8 +1023,9 @@ export default function LiveSearch() {
                 ++catalogueRequest.current; ++learningRequest.current; ++progressRequest.current; ++detailRequest.current; ++savingGen.current;
                 setProfileDraft(null);
                 setUser(null);
-                // Reset nav so the next account cannot inherit My Credits / Certificates / Events.
-                navigateToTab('Discover', true);
+                // Explicit sign-out starts the next session at Overview, without a return destination.
+                window.history.replaceState(null, '', loginPath);
+                setMode('signin');
                 setOpen(false);
                 setCourses([]);
                 setSelected(null);

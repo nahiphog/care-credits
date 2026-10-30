@@ -6,6 +6,7 @@ test('disabled email recovery is honest and cannot submit a request', async ({ p
   await expect(page.getByRole('button', { name: 'Request reset email' })).toHaveCount(0);
   await page.getByRole('link', { name: 'Back to sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in to search' })).toBeVisible();
+  await expect(page).toHaveURL(/\/log_in$/);
   await expect(page.getByRole('link', { name: 'Forgot your password?' })).toHaveCount(0);
 });
 
