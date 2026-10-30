@@ -8,6 +8,8 @@ The hackathon application is on **[`codex/v1-integrated-demo`](https://github.co
 
 ## What you can try
 
+Each dashboard section has a direct URL: `/overview`, `/my-credits`, `/discover`, `/events`, `/certificates`, `/about-credits` and `/settings`. The homepage `/` opens Discover. Sidebar navigation, refresh and browser Back/Forward select the matching page; signing in from a direct link keeps that destination.
+
 - Search the published Malaysian CPD catalogue and filter by location, date and delivery mode.
 - Inspect course details, advertised credits and provider/source links before registering externally.
 - Record provider sign-up and attendance, track self-reported points, and export personal records as CSV.

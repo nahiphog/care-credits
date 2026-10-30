@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
@@ -23,6 +24,7 @@ import { PasswordSettings } from '@/components/PasswordSettings';
 import { LiveIngestion } from '@/components/LiveIngestion';
 import { CertificatePanel } from '@/components/CertificatePanel';
 import { DateChip } from '@/components/CourseList';
+import { dashboardPageFromPath, dashboardPaths, type DashboardPage } from '@/lib/dashboard-navigation';
 import { api, ApiError, activityLabel, AuditItem, calendarYearLocal, Course, distanceLabel, emptyRecord, formatDate, locationLabel, normalizeRecordEdit, Progress, RecordData, RecordHistoryItem, User } from '@/lib/portal';
 
 const PAGE_SIZE = 12;
@@ -89,7 +91,8 @@ export default function LiveSearch() {
   const [historyFailed, setHistoryFailed] = useState(false);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'register' | 'signin'>('signin');
-  const [tab, setTab] = useState<(typeof nav)[number][1]>('Discover');
+  const pathname = usePathname();
+  const tab = dashboardPageFromPath(pathname);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -162,6 +165,16 @@ export default function LiveSearch() {
   const retryRef = useRef<(() => void) | null>(null);
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
+
+  function navigateToTab(next: DashboardPage, replace = false) {
+    const path = dashboardPaths[next];
+    // Next.js syncs native history changes with usePathname. Keep the shared
+    // dashboard mounted so search filters and unsaved profile drafts survive.
+    if (window.location.pathname !== path) {
+      window.history[replace ? 'replaceState' : 'pushState'](null, '', path);
+    }
+    setOpen(false);
+  }
 
   function beginSaving() {
     const gen = ++savingGen.current;
@@ -757,7 +770,7 @@ export default function LiveSearch() {
       setSuggestionsBusy(true);
       setLearningBusy(true);
       setAuditBusy(true);
-      setTab('Discover');
+      // Keep a directly opened dashboard URL after successful sign-in.
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -962,13 +975,15 @@ export default function LiveSearch() {
           </div>
           <nav>
             {nav.map(([Icon, item]) => (
-              <button
+              <Link
                 key={item}
+                href={dashboardPaths[item]}
+                prefetch={false}
                 className={item === tab ? 'nav-item active' : 'nav-item'}
                 aria-current={item === tab ? 'page' : undefined}
-                onClick={() => {
-                  setTab(item);
-                  setOpen(false);
+                onNavigate={(event) => {
+                  event.preventDefault();
+                  navigateToTab(item);
                   if (item === 'Events' || item === 'Discover') {
                     // Navigation preserves the filters explicitly applied by the user.
                     void searchCommitted({ page: 1 });
@@ -977,7 +992,7 @@ export default function LiveSearch() {
               >
                 <Icon />
                 <span>{item}</span>
-              </button>
+              </Link>
             ))}
           </nav>
           <div className="profile">
@@ -996,7 +1011,7 @@ export default function LiveSearch() {
                 setProfileDraft(null);
                 setUser(null);
                 // Reset nav so the next account cannot inherit My Credits / Certificates / Events.
-                setTab('Discover');
+                navigateToTab('Discover', true);
                 setOpen(false);
                 setCourses([]);
                 setSelected(null);
@@ -1075,7 +1090,7 @@ export default function LiveSearch() {
               <Menu />
             </button>
             <form className="catalogue-search" role="search" aria-label="Search catalogue" onSubmit={(event) => {
-              event.preventDefault(); setTab('Discover'); searchCommitted({ query, page: 1 });
+              event.preventDefault(); navigateToTab('Discover'); searchCommitted({ query, page: 1 });
             }}>
               <label className="search">
                 <Search aria-hidden="true" />
@@ -1157,7 +1172,7 @@ export default function LiveSearch() {
                     <button
                       className="primary"
                       onClick={() => {
-                        setTab('Discover');
+                        navigateToTab('Discover');
                         searchCommitted({ page: 1 });
                       }}
                     >
@@ -1733,7 +1748,7 @@ export default function LiveSearch() {
       </div>
       {filtersOpen && <dialog ref={filterDialogRef} id="catalogue-filter-dialog" className="filter-dialog" aria-labelledby="filter-dialog-title" onCancel={cancelFilters}>
         <div className="filter-dialog-heading"><h2 id="filter-dialog-title">Filter training</h2><button type="button" className="filter-toggle" aria-label="Close filters" onClick={cancelFilters}><X size={20} /></button></div>
-                  <form id="catalogue-filter-panel" className="catalogue-filter-panel" onSubmit={(event) => { event.preventDefault(); setTab('Discover'); search({ page: 1 }); setFiltersOpen(false); }}>
+                  <form id="catalogue-filter-panel" className="catalogue-filter-panel" onSubmit={(event) => { event.preventDefault(); navigateToTab('Discover'); search({ page: 1 }); setFiltersOpen(false); }}>
                     <p className="filter-help">Adjust your filters, then apply them to update the results.</p>
                     <fieldset><legend>Location</legend><div className="filter-fields">
                       <label>City<input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Any city" /></label>

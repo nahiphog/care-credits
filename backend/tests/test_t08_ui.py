@@ -567,7 +567,7 @@ class PortalAccessibilityTests(unittest.TestCase):
         self.assertIn('Loading digest preference', overview)
         self.assertIn('loading ? (', overview)
         self.assertIn("setTab('Overview')", page)
-        self.assertIn("setTab('Discover')", live)
+        self.assertIn("navigateToTab('Discover', true)", live)
         self.assertIn('setOpen(false)', live)
         # Shared ingestion unmounts on logout, discarding operator-only component state.
         self.assertIn("tab === 'Ingestion' && user.role === 'operator'", page)
