@@ -72,7 +72,9 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_empty_search_skips_extract(self):
         with patch.object(d, 'tavily_post', return_value={'results': []}) as call:
-            self.assertEqual(d.discover('cardiology')['sources'], [])
+            result = d.discover('cardiology')
+            self.assertEqual(result['sources'], [])
+            self.assertIn('No source pages matched', result['warnings'][0])
             call.assert_called_once()
 
     def test_extraction_failure_keeps_snippets(self):

@@ -94,6 +94,8 @@ def discover(query, max_results=5):
                 "extraction_status": "failed", "verification_status": "unverified",
             }
     warnings = []
+    if not sources:
+        warnings.append('No source pages matched this search. No model extraction was performed; try a broader query.')
     if sources:
         try:
             extracted = tavily_post("extract", {

@@ -29,7 +29,7 @@ for module ownership and `VERCEL.md` for deployment configuration.
   are excluded from the isolated test runner; mocked tests do not establish a new
   successful live model run. Historical live-run evidence remains in `VERCEL.md`.
 
-## Operational limits retained explicitly
+## Operational limits at the architecture release
 
 Email digests and forgotten-password email recovery are not configured. The UI
 does not promise delivery; current-password changes work and revoke sessions.
@@ -42,3 +42,24 @@ deployment checks remains separate work. Server-observed IP rate-limit buckets
 can still group users behind the private proxy; trusted per-client attribution
 needs a separately verified forwarding contract. The application does not trust
 arbitrary client-supplied forwarding headers.
+
+## Operational hardening follow-up
+
+The follow-up adds signed per-client forwarding, a project-wide discovery attempt
+ceiling, email recovery behind an explicit disabled flag, persistent maintenance
+receipts, conservative scheduled digest claims and an operator catalogue-quality
+queue. Vercel now requires the `backend` and `frontend` GitHub checks for production
+alias assignment. See `OPERATIONS.md` for enablement, limits and release procedure.
+
+Focused recovery/forwarding/digest tests passed, as did the schema19 migration
+tests and a 16-table logical restoration drill in a disposable PostgreSQL schema.
+Existing routes and columns were compared before updating the contract snapshot;
+all were preserved. The seven existing browser regressions and three new recovery/
+operator flows passed after fixing development-mode reset-token retention.
+
+One live Tavily query returned no source pages (job
+`8e163b6a6cf6432a88246d73e33c067c`); it made no model extraction and is not NVIDIA
+execution proof. Repeating that terminal job returned its unchanged receipt. The
+temporary verification account was removed and the job retained for the operator.
+Another provider call requires the separately requested approval. Email delivery
+remains disabled at the user's request, pending a sender and real delivery checks.

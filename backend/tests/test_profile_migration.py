@@ -109,10 +109,10 @@ class ProfileMigrationTests(unittest.TestCase):
         self.assertIs(portal_models.Account, schema.Account)
         self.assertTrue(callable(portal_models.fill_course))
 
-    def test_explicit_migration_stamps_v18_and_backfills_v17(self):
+    def test_explicit_migration_stamps_v19_and_backfills_v17(self):
         from database.migrations import migrate_schema
         migrate_schema(self.db)
-        self.assertEqual(max(row.version for row in self.db.query(SchemaVersion)), 18)
+        self.assertEqual(max(row.version for row in self.db.query(SchemaVersion)), 19)
         self.assertEqual(self.db.get(AccountProfile, 'existing-account').name, 'Original doctor')
         migrate_schema(self.db)
         self.assertEqual(self.db.query(AccountProfile).count(), 1)
@@ -121,7 +121,7 @@ class ProfileMigrationTests(unittest.TestCase):
         from database.migrations import migrate_schema
         self.db.query(SchemaVersion).delete(); self.db.commit()
         migrate_schema(self.db)
-        self.assertEqual(max(row.version for row in self.db.query(SchemaVersion)), 18)
+        self.assertEqual(max(row.version for row in self.db.query(SchemaVersion)), 19)
         self.assertEqual(self.db.get(AccountProfile, 'existing-account').public_slug, 'preserved-public-link')
 
 

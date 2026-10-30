@@ -1,7 +1,7 @@
 """Account, profile, session and throttle persistence. No HTTP dependencies."""
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
-from models import Account, LoginSession, Throttle
+from models import Account, LoginSession, Throttle, PasswordReset
 
 
 def account_by_email(db, email):
@@ -37,6 +37,10 @@ def revoke_session(db, token_hash):
 
 def revoke_account_sessions(db, account_id):
     db.query(LoginSession).filter_by(account_id=account_id).delete()
+
+
+def revoke_account_recovery(db, account_id):
+    db.query(PasswordReset).filter_by(account_id=account_id).delete()
 
 
 def create_session(db, **values):

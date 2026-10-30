@@ -85,3 +85,15 @@ class ServerlessTests(unittest.TestCase):
     def test_missing_credentials_block_before_job_creation(self):
         with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('services.discovery_status_service._scraper_service_status', return_value={}):
             self.assertEqual(self.create().status_code, 409)
+
+    def test_daily_budget_blocks_provider_call_and_terminal_reads_remain_free(self):
+        def fake_run(job):
+            return SimpleNamespace(**CompleteJob(lease_token=job['lease_token'], status='succeeded', candidates=[], sources=[], warnings=[], usage={}).model_dump(mode='json'))
+        with patch.dict(os.environ, {'SERVERLESS_MODE':'true','DISCOVERY_DAILY_RUN_LIMIT':'1'}), patch('services.ingestion_job_service.execute_scraper', side_effect=fake_run) as run:
+            first = self.create().json()['id']
+            url = '/api/v1/admin/ingestion-jobs/' + first + '/run'
+            self.assertEqual(self.client.post(url).status_code,200)
+            self.assertEqual(self.client.post(url).status_code,200)
+            second = self.client.post('/api/v1/admin/ingestion-jobs',headers={'Idempotency-Key':'second-budget-job'},json={'query':'Other Malaysia CPD','max_results':1}).json()['id']
+            self.assertEqual(self.client.post('/api/v1/admin/ingestion-jobs/'+second+'/run').status_code,429)
+            self.assertEqual(run.call_count,1)

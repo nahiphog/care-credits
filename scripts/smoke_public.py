@@ -32,12 +32,17 @@ def check(response, status=200):
 try:
     with httpx.Client(base_url=base, timeout=90, headers={'Origin': base, 'X-Care-Client': '1'}) as client:
         check(client.get('/'))
-        assert check(client.get('/api/v1/config')).json()['signup_enabled']
+        config = check(client.get('/api/v1/config')).json()
+        assert config['signup_enabled']
+        assert not config['password_recovery_available'], 'Recovery must stay disabled without a sender'
+        check(client.get('/reset-password'))
         check(client.post('/api/v1/auth/register', json={'email': email, 'password': password, 'name': 'Deployment Test'}), 201)
         login = check(client.post('/api/v1/auth/login', json={'email': email, 'password': password}))
         cookie = login.headers.get('set-cookie', '').lower()
         assert 'secure' in cookie and 'httponly' in cookie
         check(client.get('/api/v1/admin/services'), 403)
+        check(client.get('/api/v1/admin/maintenance'), 403)
+        check(client.get('/api/v1/admin/catalogue-quality'), 403)
         with SessionLocal() as db:
             test_account = db.query(Account).filter_by(email=email).one()
             test_account.role = 'operator'
@@ -50,6 +55,10 @@ try:
         assert services.get('database') == 'ready', 'Database readiness failed'
         assert services.get('scraper', {}).get('status') == 'ready', 'Private scraper binding/readiness failed'
         assert services.get('paid_scrape_ready'), 'Live discovery configuration is not ready'
+        maintenance = check(client.get('/api/v1/admin/maintenance')).json()
+        assert maintenance['client_identity_verified'], 'Vercel client identity was not signed and verified'
+        quality = check(client.get('/api/v1/admin/catalogue-quality')).json()
+        assert isinstance(quality['items'], list)
         with SessionLocal() as db:
             db.query(Account).filter_by(email=email).one().role = 'doctor'
             db.commit()
@@ -79,7 +88,7 @@ try:
         check(client.get('/api/v1/me/certificates/' + cert['id'] + '?format=html'))
         check(client.post('/api/v1/auth/logout'))
         check(client.get('/api/v1/me'), 401)
-        print('PASS: dashboard, signup/login, secure cookies, role protection, private scraper readiness, persistent profile, record, progress, CSV, certificate, logout. No paid discovery run invoked.')
+        print('PASS: dashboard, signup/login, secure cookies, role protection, signed client identity, maintenance, catalogue quality, disabled recovery, private scraper readiness, persistent profile, record, progress, CSV, certificate, logout. No paid discovery run invoked.')
 finally:
     with SessionLocal() as db:
         account = db.query(Account).filter_by(email=email).first()

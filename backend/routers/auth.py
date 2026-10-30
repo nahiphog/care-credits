@@ -10,13 +10,26 @@ from domain.errors import DomainError
 from domain.config import production_env
 from http_boundary import client_host
 from errors import envelope
-from schemas.account import Credentials, PasswordChange
+from schemas.account import Credentials, PasswordChange, RecoveryRequest, RecoveryConfirm
+from services import recovery_service
 from serializers.common import profile
 from services import auth_service
 from services.rate_limit import throttle
 from services.oauth_service import authorize_url, configured as google_oauth, exchange_code, issue_session, public_frontend_base, upsert_account, OAuthError
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
+
+
+@router.post('/password-recovery')
+def request_recovery(body: RecoveryRequest, request: Request, db=Depends(get_db)):
+    return recovery_service.request_reset(db, body.email, client_host(request))
+
+
+@router.post('/password-reset')
+def confirm_recovery(body: RecoveryConfirm, request: Request, response: Response, db=Depends(get_db)):
+    result = recovery_service.reset(db, body.token, body.new_password, client_host(request))
+    _delete_session_cookie(response, 'care_session')
+    return result
 
 def _session_cookie_kwargs():
     return {

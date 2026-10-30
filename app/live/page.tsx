@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   BookOpen,
@@ -81,6 +83,7 @@ export default function LiveSearch() {
   const [booting, setBooting] = useState(true);
   const [signup, setSignup] = useState(false);
   const [oauth, setOauth] = useState(false);
+  const [recovery, setRecovery] = useState(false);
   const [demo, setDemo] = useState(false);
   const [history, setHistory] = useState<RecordHistoryItem[]>([]);
   const [historyFailed, setHistoryFailed] = useState(false);
@@ -273,6 +276,7 @@ export default function LiveSearch() {
       api('/config').then((c) => {
         setSignup(c.signup_enabled); setDigestAvailable(!!c.digest_available);
         setOauth(!!c.oauth_google);
+        setRecovery(!!c.password_recovery_available);
         setDemo(!!c.demo);
         // Mirror LoginForm: only offer register when signup is enabled.
         setMode(c.signup_enabled && !c.demo ? 'register' : 'signin');
@@ -917,6 +921,7 @@ export default function LiveSearch() {
                 Continue with Google
               </a>
             )}
+            {recovery && <Link href="/reset-password">Forgot your password?</Link>}
             {signup && (
               <button
                 type="button"

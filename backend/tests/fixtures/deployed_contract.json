@@ -22,6 +22,13 @@
       null
     ],
     [
+      "/api/v1/admin/catalogue-quality",
+      [
+        "GET"
+      ],
+      null
+    ],
+    [
       "/api/v1/admin/daily-scrape",
       [
         "POST"
@@ -78,6 +85,13 @@
       null
     ],
     [
+      "/api/v1/admin/maintenance",
+      [
+        "GET"
+      ],
+      null
+    ],
+    [
       "/api/v1/admin/scrape-topics",
       [
         "GET"
@@ -128,6 +142,20 @@
     ],
     [
       "/api/v1/auth/password",
+      [
+        "POST"
+      ],
+      null
+    ],
+    [
+      "/api/v1/auth/password-recovery",
+      [
+        "POST"
+      ],
+      null
+    ],
+    [
+      "/api/v1/auth/password-reset",
       [
         "POST"
       ],
@@ -450,118 +478,6 @@
         false
       ]
     ],
-    "affiliation_certificates": [
-      [
-        "id",
-        "VARCHAR",
-        false,
-        true
-      ],
-      [
-        "account_id",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "year",
-        "INTEGER",
-        false,
-        false
-      ],
-      [
-        "recorded_points_snapshot",
-        "FLOAT",
-        false,
-        false
-      ],
-      [
-        "issued_at",
-        "FLOAT",
-        false,
-        false
-      ],
-      [
-        "document_hash",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "disclaimer_version",
-        "VARCHAR",
-        false,
-        false
-      ]
-    ],
-    "course_candidates": [
-      [
-        "id",
-        "VARCHAR",
-        false,
-        true
-      ],
-      [
-        "job_id",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "source_key",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "data",
-        "JSON",
-        false,
-        false
-      ],
-      [
-        "status",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "reviewed_by",
-        "VARCHAR",
-        true,
-        false
-      ],
-      [
-        "reviewed_at",
-        "FLOAT",
-        true,
-        false
-      ],
-      [
-        "review_reason",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "version",
-        "INTEGER",
-        false,
-        false
-      ],
-      [
-        "schema_version",
-        "INTEGER",
-        false,
-        false
-      ],
-      [
-        "resulting_course_id",
-        "VARCHAR",
-        true,
-        false
-      ]
-    ],
     "courses": [
       [
         "id",
@@ -733,6 +649,242 @@
       ],
       [
         "reviewed_at",
+        "FLOAT",
+        true,
+        false
+      ]
+    ],
+    "maintenance_runs": [
+      [
+        "id",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "started_at",
+        "FLOAT",
+        false,
+        false
+      ],
+      [
+        "finished_at",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "status",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "counts",
+        "JSON",
+        false,
+        false
+      ],
+      [
+        "error_type",
+        "VARCHAR",
+        true,
+        false
+      ]
+    ],
+    "portal_audit": [
+      [
+        "id",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "account_id",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "action",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "entity_id",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "changed",
+        "JSON",
+        false,
+        false
+      ],
+      [
+        "created_at",
+        "FLOAT",
+        false,
+        false
+      ]
+    ],
+    "portal_schema_version": [
+      [
+        "version",
+        "INTEGER",
+        false,
+        true
+      ]
+    ],
+    "request_throttle": [
+      [
+        "key",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "count",
+        "INTEGER",
+        false,
+        false
+      ]
+    ],
+    "account_profiles": [
+      [
+        "account_id",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "name",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "city",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "state",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "latitude",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "longitude",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "location_consent_at",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "public_enabled",
+        "BOOLEAN",
+        false,
+        false
+      ],
+      [
+        "public_slug",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "bio",
+        "VARCHAR",
+        false,
+        false
+      ]
+    ],
+    "affiliation_certificates": [
+      [
+        "id",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "account_id",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "year",
+        "INTEGER",
+        false,
+        false
+      ],
+      [
+        "recorded_points_snapshot",
+        "FLOAT",
+        false,
+        false
+      ],
+      [
+        "issued_at",
+        "FLOAT",
+        false,
+        false
+      ],
+      [
+        "document_hash",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "disclaimer_version",
+        "VARCHAR",
+        false,
+        false
+      ]
+    ],
+    "digest_dispatches": [
+      [
+        "key",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "account_id",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "state",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "attempted_at",
+        "FLOAT",
+        false,
+        false
+      ],
+      [
+        "finished_at",
         "FLOAT",
         true,
         false
@@ -936,56 +1088,6 @@
         false
       ]
     ],
-    "field_evidence": [
-      [
-        "id",
-        "VARCHAR",
-        false,
-        true
-      ],
-      [
-        "course_id",
-        "VARCHAR",
-        true,
-        false
-      ],
-      [
-        "candidate_id",
-        "VARCHAR",
-        true,
-        false
-      ],
-      [
-        "source_document_id",
-        "VARCHAR",
-        true,
-        false
-      ],
-      [
-        "field_name",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "excerpt",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "reviewed_by",
-        "VARCHAR",
-        true,
-        false
-      ],
-      [
-        "reviewed_at",
-        "FLOAT",
-        true,
-        false
-      ]
-    ],
     "ingestion_jobs": [
       [
         "id",
@@ -1080,9 +1182,9 @@
         false
       ]
     ],
-    "portal_audit": [
+    "password_reset_tokens": [
       [
-        "id",
+        "token_hash",
         "VARCHAR",
         false,
         true
@@ -1094,36 +1196,78 @@
         false
       ],
       [
-        "action",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "entity_id",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "changed",
-        "JSON",
-        false,
-        false
-      ],
-      [
-        "created_at",
+        "expires_at",
         "FLOAT",
         false,
         false
       ]
     ],
-    "portal_schema_version": [
+    "course_candidates": [
+      [
+        "id",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "job_id",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "source_key",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "data",
+        "JSON",
+        false,
+        false
+      ],
+      [
+        "status",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "reviewed_by",
+        "VARCHAR",
+        true,
+        false
+      ],
+      [
+        "reviewed_at",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "review_reason",
+        "VARCHAR",
+        false,
+        false
+      ],
       [
         "version",
         "INTEGER",
         false,
-        true
+        false
+      ],
+      [
+        "schema_version",
+        "INTEGER",
+        false,
+        false
+      ],
+      [
+        "resulting_course_id",
+        "VARCHAR",
+        true,
+        false
       ]
     ],
     "record_history": [
@@ -1154,20 +1298,6 @@
       [
         "created_at",
         "FLOAT",
-        false,
-        false
-      ]
-    ],
-    "request_throttle": [
-      [
-        "key",
-        "VARCHAR",
-        false,
-        true
-      ],
-      [
-        "count",
-        "INTEGER",
         false,
         false
       ]
@@ -1222,65 +1352,53 @@
         false
       ]
     ],
-    "account_profiles": [
+    "field_evidence": [
       [
-        "account_id",
+        "id",
         "VARCHAR",
         false,
         true
       ],
       [
-        "name",
+        "course_id",
         "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "city",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "state",
-        "VARCHAR",
-        false,
-        false
-      ],
-      [
-        "latitude",
-        "FLOAT",
         true,
         false
       ],
       [
-        "longitude",
-        "FLOAT",
+        "candidate_id",
+        "VARCHAR",
         true,
         false
       ],
       [
-        "location_consent_at",
-        "FLOAT",
+        "source_document_id",
+        "VARCHAR",
         true,
         false
       ],
       [
-        "public_enabled",
-        "BOOLEAN",
-        false,
-        false
-      ],
-      [
-        "public_slug",
+        "field_name",
         "VARCHAR",
         false,
         false
       ],
       [
-        "bio",
+        "excerpt",
         "VARCHAR",
         false,
+        false
+      ],
+      [
+        "reviewed_by",
+        "VARCHAR",
+        true,
+        false
+      ],
+      [
+        "reviewed_at",
+        "FLOAT",
+        true,
         false
       ]
     ]

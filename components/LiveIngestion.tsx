@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import './LiveIngestion.css';
 import { CandidateCard } from '@/components/CandidateCard';
 import { IntegrationStatus } from '@/components/IntegrationStatus';
+import { OperationsStatus } from '@/components/OperationsStatus';
 import { api, Candidate, Job, publicWebUrl } from '@/lib/portal';
 
 type Topic = { query: string; max_results: number };
@@ -584,6 +585,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       <details className="ingestion-advanced">
         <summary>Advanced tools &amp; connection details</summary>
         <p className="ingestion-hint">Service diagnostics and maintenance actions for operators.</p>
+      <OperationsStatus />
       <IntegrationStatus
         className="empty-copy"
         onLiveReady={(ready, loading) => {

@@ -66,6 +66,7 @@ def change_password(db, account, current_password, new_password):
         raise DomainError(422, 'Choose a different new password.')
     account.password_hash = password_hash(new_password)
     accounts.revoke_account_sessions(db, account.id)
+    accounts.revoke_account_recovery(db, account.id)
     audit(db, account.id, 'password_changed', account.id, {})
     accounts.save(db)
     return {'message': 'Password changed. Please sign in again on each device.'}

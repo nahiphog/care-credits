@@ -10,7 +10,7 @@ os.environ['SERVERLESS_MODE'] = 'true'
 os.environ['APP_ENV'] = 'production'
 os.environ['DEMO_MODE'] = 'false'
 os.environ['DAILY_SCRAPE_ENABLED'] = 'false'
-os.environ['DIGEST_ENABLED'] = 'false'
+os.environ.setdefault('DIGEST_ENABLED', 'false')
 os.environ['SCRAPE_TOPICS_FILE'] = str(ROOT / 'config' / 'scrape_topics.json')
 hosts = [os.getenv('VERCEL_PROJECT_PRODUCTION_URL'), os.getenv('VERCEL_URL')]
 origins = ['https://' + host for host in hosts if host]

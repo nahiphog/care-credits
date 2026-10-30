@@ -99,6 +99,13 @@ def migrate_schema(db):
         db.add(SchemaVersion(version=18))
         db.commit()
         current = 18
+    if current == 18:
+        from models.operations import PasswordReset, MaintenanceRun, DigestDispatch
+        for model in (PasswordReset, MaintenanceRun, DigestDispatch):
+            model.__table__.create(db.get_bind(), checkfirst=True)
+        db.add(SchemaVersion(version=19))
+        db.commit()
+        current = 19
     if current != SCHEMA_VERSION:
         raise RuntimeError('Unsupported portal schema. Apply the matching migration.')
 

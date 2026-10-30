@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { forwardClientIdentity } from '@/lib/clientIdentity';
 import { apiErrorBody, envelopeHeaders, notFoundBody, unavailableBody, type ApiErrorBody } from '@/lib/apiEnvelope';
 
 export const dynamic = 'force-dynamic';
@@ -72,6 +73,7 @@ async function proxy(request: NextRequest, path: string[]) {
     if (['host', 'connection', 'content-length'].includes(key.toLowerCase())) return;
     headers.set(key, value);
   });
+  forwardClientIdentity(request.headers, headers, request.method, new URL(target).pathname);
   const discoveryRun = request.method === 'POST' && /^admin\/ingestion-jobs\/[^/]+\/run$/.test(joined);
   const timeout = AbortSignal.timeout(discoveryRun ? 240_000 : 30_000);
   const init: RequestInit = {

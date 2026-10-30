@@ -178,35 +178,8 @@ def send_via_provider(to: str, subject: str, body: str, html_body: str | None = 
             (out / f'{stem}.html').write_text(html_body, encoding='utf-8')
         return {'status': 'sent', 'provider_message_id': str(path), 'error': ''}
     if provider == 'smtp':
-        import smtplib
-        from email.message import EmailMessage
-
-        host = os.getenv('SMTP_HOST') or ''
-        port = int(os.getenv('SMTP_PORT') or '587')
-        user = os.getenv('SMTP_USER') or ''
-        password = os.getenv('SMTP_PASSWORD') or ''
-        from_addr = os.getenv('SMTP_FROM') or user
-        if not host or not from_addr:
-            return {'status': 'failed', 'provider_message_id': None, 'error': 'SMTP is not configured.'}
-        message = EmailMessage()
-        message['Subject'] = subject
-        message['From'] = from_addr
-        message['To'] = to
-        # Plain first, then HTML alternative so clients that prefer HTML still keep a text part.
-        message.set_content(body)
-        if html_body:
-            message.add_alternative(html_body, subtype='html')
-        # Hint clients/list-unsub tooling at the one-click NTF-01 link embedded in the body.
-        for line in body.splitlines():
-            if line.startswith('Unsubscribe: '):
-                message['List-Unsubscribe'] = f'<{line[len("Unsubscribe: "):].strip()}>'
-                break
-        with smtplib.SMTP(host, port, timeout=20) as client:
-            client.starttls()
-            if user:
-                client.login(user, password)
-            client.send_message(message)
-        return {'status': 'sent', 'provider_message_id': f'smtp:{to}', 'error': ''}
+        from services.mail_service import send
+        return send(to, subject, body, html_body)
     return {'status': 'failed', 'provider_message_id': None, 'error': f'Unknown MAIL_PROVIDER={provider}'}
 
 

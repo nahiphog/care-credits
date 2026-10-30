@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { ArrowRight, BookOpen, Compass, GraduationCap, ShieldCheck } from 'lucide-react';
 import { Brand } from '@/components/Brand';
@@ -9,11 +10,13 @@ export function LoginForm({
   demo,
   signup,
   oauth,
+  recovery,
   onLogin,
 }: {
   demo: boolean;
   signup: boolean;
   oauth?: boolean;
+  recovery?: boolean;
   onLogin: (u: User) => void;
 }) {
   const [email, setEmail] = useState(demo ? 'demo@carecredits.local' : '');
@@ -121,11 +124,14 @@ export function LoginForm({
               {busy ? 'Please wait…' : register ? 'Create account' : 'Sign in'} <ArrowRight size={17} />
             </button>
             {oauth && (
+              // OAuth needs full-document navigation; prefetching can change handshake state.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a className="secondary full" href="/api/v1/auth/oauth/google">
                 Continue with Google
               </a>
             )}
           </form>
+          {recovery && <Link href="/reset-password">Forgot your password?</Link>}
           {signup && (
             <button
               className="text-btn login-toggle"

@@ -66,6 +66,7 @@ export default function Home() {
   const [demo, setDemo] = useState(false);
   const [signup, setSignup] = useState(false);
   const [oauth, setOauth] = useState(false);
+  const [recovery, setRecovery] = useState(false);
   const [history, setHistory] = useState<import('@/lib/portal').RecordHistoryItem[]>([]);
   const [historyFailed, setHistoryFailed] = useState(false);
   const [tab, setTab] = useState<WorkspaceTab>('Overview');
@@ -172,6 +173,7 @@ export default function Home() {
         setDemo(c.demo); setDigestAvailable(!!c.digest_available);
         setSignup(c.signup_enabled);
         setOauth(!!c.oauth_google);
+        setRecovery(!!c.password_recovery_available);
       }),
       api('/me').then((account) => { setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account); }).catch((error) => { if (!(error instanceof ApiError && error.status === 401)) throw error; }),
     ]).catch((error) => setBootstrapError(error.message || 'CareCredits could not be reached.')).finally(() => setBooting(false));
@@ -491,7 +493,7 @@ export default function Home() {
     );
   }
   if (bootstrapError) return <main className="public-page"><section role="alert"><h1>CareCredits is unavailable</h1><p>{bootstrapError}</p><button onClick={() => { setBooting(true); setBootstrapError(''); setBootstrapAttempt((value) => value + 1); }}>Try again</button></section></main>;
-  if (!user) return <>{error && <p role="alert" className="alert error">{error}</p>}<LoginForm demo={demo} signup={signup} oauth={oauth} onLogin={(account) => { setError(''); setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account); }} /></>;
+  if (!user) return <>{error && <p role="alert" className="alert error">{error}</p>}<LoginForm demo={demo} signup={signup} oauth={oauth} recovery={recovery} onLogin={(account) => { setError(''); setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account); }} /></>;
 
   const nav = [
     [LayoutDashboard, 'Overview'],

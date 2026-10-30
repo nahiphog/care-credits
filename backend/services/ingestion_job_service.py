@@ -135,6 +135,17 @@ def run_serverless_job(job_id, user=None, db=None):
         return job_json(job)
     if job.max_results != 1:
         raise DomainError(422, 'Create a new job with one source.')
+    if job.status != 'queued':
+        raise DomainError(409, 'Job already running or requires an explicit retry.')
+    # A conservative project-wide daily attempt ceiling includes manual retries.
+    # Terminal idempotent reads above never consume budget or call either provider.
+    try:
+        daily_limit = int(os.getenv('DISCOVERY_DAILY_RUN_LIMIT', '10'))
+    except ValueError:
+        raise DomainError(503, 'Discovery daily limit is invalid.')
+    if not 1 <= daily_limit <= 100:
+        raise DomainError(503, 'Discovery daily limit must be between 1 and 100.')
+    throttle(db, 'discovery-project-day', daily_limit, 86400)
     token = secrets.token_urlsafe(24)
     from shared.discovery_limits import SERVERLESS_LEASE_SECONDS
     claimed_at = time.time()

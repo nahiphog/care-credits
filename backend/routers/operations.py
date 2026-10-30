@@ -5,9 +5,20 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from database import get_db
 from security import operator
 from services.audit_service import list_audit
-from services.maintenance_service import maintain
+from services.maintenance_service import maintain, status
+from services.catalogue_quality_service import queue
+from http_boundary import client_host
 
 router = APIRouter(tags=['operations'])
+
+@router.get('/api/v1/admin/maintenance')
+def maintenance_status(request: Request, user=Depends(operator), db=Depends(get_db)):
+    client_host(request)
+    return {**status(db), 'client_identity_verified': bool(getattr(request.state, 'client_identity_verified', False))}
+
+@router.get('/api/v1/admin/catalogue-quality')
+def catalogue_quality(page: int = 1, user=Depends(operator), db=Depends(get_db)):
+    return queue(db, page)
 
 @router.get('/api/v1/admin/audit')
 def audit(page: int = 1, page_size: int = 20, user=Depends(operator), db=Depends(get_db)):

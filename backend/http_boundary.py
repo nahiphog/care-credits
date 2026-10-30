@@ -1,5 +1,8 @@
 """Cross-cutting HTTP boundary; domain modules do not import this module."""
 import os, secrets, time, traceback
+import hashlib
+import hmac
+import ipaddress
 from fastapi import Request
 from errors import envelope, request_id
 from observe import request_line, log as app_log
@@ -7,6 +10,21 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from domain.config import request_timezone
 
 def client_host(request: Request) -> str:
+    secret = os.getenv('PROXY_IDENTITY_SECRET', '')
+    ip = request.headers.get('x-care-proxy-ip', '')
+    timestamp = request.headers.get('x-care-proxy-time', '')
+    signature = request.headers.get('x-care-proxy-signature', '')
+    if secret and ip and timestamp and signature:
+        try:
+            address = ipaddress.ip_address(ip)
+            fresh = abs(time.time() - int(timestamp)) <= 60
+            payload = '\n'.join((timestamp, ip, request.method, request.url.path))
+            expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+            if fresh and secrets.compare_digest(signature, expected):
+                request.state.client_identity_verified = True
+                return str(address)
+        except ValueError:
+            pass
     if request.client and request.client.host:
         return request.client.host
     return 'unknown'

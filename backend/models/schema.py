@@ -10,3 +10,4 @@ from .digest import DigestPreference, DigestSend
 from .certificate import AffiliationCertificate
 from .session import LoginSession
 from .schema_version import SchemaVersion
+from .operations import PasswordReset, MaintenanceRun, DigestDispatch

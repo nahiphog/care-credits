@@ -27,6 +27,16 @@ class Credentials(BaseModel):
         return _display_name(value)
 
 
+class RecoveryRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    _email_check = field_validator('email')(Credentials.email_check.__func__)
+
+
+class RecoveryConfirm(BaseModel):
+    token: str = Field(min_length=20, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 class ProfileChange(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     city: str = Field(max_length=100)

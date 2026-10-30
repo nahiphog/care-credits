@@ -24,7 +24,7 @@ def production_env() -> bool:
 
 def digest_available():
     return (os.getenv('DIGEST_ENABLED', 'true').lower() == 'true'
-            and os.getenv('SERVERLESS_MODE') != 'true'
+            and (os.getenv('SERVERLESS_MODE') != 'true' or os.getenv('SERVERLESS_DIGEST_ENABLED') == 'true')
             and (os.getenv('MAIL_PROVIDER') or 'log').strip().lower() == 'smtp'
             and bool((os.getenv('SMTP_HOST') or '').strip())
             and bool((os.getenv('SMTP_FROM') or os.getenv('SMTP_USER') or '').strip()))

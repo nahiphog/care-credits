@@ -36,7 +36,8 @@ def isolated_environment(inherited):
     settings = {'APP_ENV', 'DEMO_MODE', 'ALLOW_SIGNUP', 'SERVERLESS_MODE', 'CRON_SECRET',
                 'BACKEND_URL', 'BACKEND_INTERNAL_URL', 'PUBLIC_API_BASE', 'PUBLIC_FRONTEND_BASE',
                 'ALLOWED_ORIGINS', 'CATALOGUE_AUTO_PUBLISH_NEW', 'DIGEST_ENABLED',
-                'DAILY_SCRAPE_ENABLED', 'SCRAPE_TOPICS_FILE', 'DAILY_SCRAPE_JOB_CEILING'}
+                'DAILY_SCRAPE_ENABLED', 'SCRAPE_TOPICS_FILE', 'DAILY_SCRAPE_JOB_CEILING',
+                'PASSWORD_RECOVERY_ENABLED', 'SERVERLESS_DIGEST_ENABLED', 'DISCOVERY_DAILY_RUN_LIMIT'}
     env = {key: value for key, value in inherited.items()
            if key.upper() not in settings and not key.upper().startswith(prefixes)
            and not key.upper().endswith(suffixes)}
