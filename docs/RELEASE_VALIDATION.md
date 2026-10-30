@@ -63,3 +63,31 @@ execution proof. Repeating that terminal job returned its unchanged receipt. The
 temporary verification account was removed and the job retained for the operator.
 Another provider call requires the separately requested approval. Email delivery
 remains disabled at the user's request, pending a sender and real delivery checks.
+
+## Extraction repair and successful live verification — 30 October 2026
+
+The later approved investigation supersedes the live-extraction gap above. A
+diagnostic reproduction rejected directory records on description/provider/mode
+schema fields, then identified provider quotations that did not support the
+claimed name. A direct course fetch also exposed an empty Tavily extraction.
+
+The repair distinguishes safe error categories, normalizes missing optional
+descriptions, corrects identity quotations only from literal fetched text, supports
+direct course URLs and bounded matching detail links, and adds a restricted public
+HTML fallback for CPD Online. Required identity and source-evidence checks remain.
+The restricted adapter's directory-to-detail path passed a public-page check and
+mocked safety tests. No authenticated lesson content is accessed.
+
+Live job `541b975e26994f5f8c6feb1621390886` succeeded with no warnings. Its receipt
+records `nvidia/nemotron-3-super-120b-a12b` at `api.tokenfactory.nebius.com`, 5,401
+reported model tokens and four validated candidates. Search selected the provider
+homepage on this run, so this is live proof of extraction, not an isolated live
+proof of the fallback. All four candidates are held for operator review; no new
+courses were auto-published. Unknown dates, fees and points remain null. Repeating
+the terminal run returned the unchanged receipt without another extraction.
+
+Code release `6597d59` passed the 423-test backend suite (37 modules, no failed
+modules), ten browser tests, and staged end-to-end checks covering authentication,
+profile/learning-record persistence, CSV, certificates, permissions, maintenance
+and disabled email. The temporary verification accounts were removed. The public
+URL remains `https://care-credits-hackathon.vercel.app/`.
