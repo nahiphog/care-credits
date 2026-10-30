@@ -24,7 +24,7 @@ import { PasswordSettings } from '@/components/PasswordSettings';
 import { LiveIngestion } from '@/components/LiveIngestion';
 import { CertificatePanel } from '@/components/CertificatePanel';
 import { DateChip } from '@/components/CourseList';
-import { dashboardPageFromPath, dashboardPaths, dashboardReturnPath, loginPath, loginPathFor, type DashboardPage } from '@/lib/dashboard-navigation';
+import { authPathFor, dashboardPageFromPath, dashboardPaths, dashboardReturnPath, loginPath, signupPath, type DashboardPage } from '@/lib/dashboard-navigation';
 import { api, ApiError, activityLabel, AuditItem, calendarYearLocal, Course, distanceLabel, emptyRecord, formatDate, locationLabel, normalizeRecordEdit, Progress, RecordData, RecordHistoryItem, User } from '@/lib/portal';
 
 const PAGE_SIZE = 12;
@@ -90,8 +90,8 @@ export default function LiveSearch() {
   const [history, setHistory] = useState<RecordHistoryItem[]>([]);
   const [historyFailed, setHistoryFailed] = useState(false);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'register' | 'signin'>('signin');
   const pathname = usePathname();
+  const mode = pathname === signupPath ? 'register' : 'signin';
   const tab = dashboardPageFromPath(pathname);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -263,7 +263,7 @@ export default function LiveSearch() {
       if (!userRef.current) return;
       userRef.current = null;
       ++workspaceRequest.current; ++catalogueRequest.current; ++learningRequest.current; ++progressRequest.current; ++detailRequest.current; ++savingGen.current;
-      setUser(null); setMode('signin'); setSelected(null); setCourses([]); setRecords([]); setProgress(null); setSuggestions([]); setAudits([]); setOpen(false); setFiltersOpen(false);
+      setUser(null); setSelected(null); setCourses([]); setRecords([]); setProgress(null); setSuggestions([]); setAudits([]); setOpen(false); setFiltersOpen(false);
       setError((event as CustomEvent<string>).detail || 'Your session has expired. Please sign in again.');
     };
     window.addEventListener('carecredits:session-expired', expired);
@@ -291,8 +291,6 @@ export default function LiveSearch() {
         setOauth(!!c.oauth_google);
         setRecovery(!!c.password_recovery_available);
         setDemo(!!c.demo);
-        // Mirror LoginForm: only offer register when signup is enabled.
-        setMode(c.signup_enabled && !c.demo ? 'register' : 'signin');
         if (c.demo) {
           setEmail((current) => current || 'demo@carecredits.local');
           setPassword((current) => current || 'CareCredits-demo-2026');
@@ -308,13 +306,17 @@ export default function LiveSearch() {
     if (booting || bootstrapError) return;
     // Read the current address so an explicit logout cannot reuse a stale page path.
     const currentPath = window.location.pathname;
-    if (!user?.id && currentPath !== loginPath) {
-      window.history.replaceState(null, '', loginPathFor(currentPath));
-    } else if (user?.id && currentPath === loginPath) {
-      const next = new URLSearchParams(window.location.search).get('next');
+    const isAuthPath = currentPath === loginPath || currentPath === signupPath;
+    const next = new URLSearchParams(window.location.search).get('next');
+    if (user?.id && isAuthPath) {
       window.history.replaceState(null, '', dashboardReturnPath(next));
+    } else if (!user?.id && !isAuthPath) {
+      window.history.replaceState(null, '', authPathFor(loginPath, currentPath));
+    } else if (!user?.id && currentPath === signupPath && !signup) {
+      // A direct signup URL must respect the server's registration setting.
+      window.history.replaceState(null, '', authPathFor(loginPath, next));
     }
-  }, [booting, bootstrapError, user?.id, pathname]);
+  }, [booting, bootstrapError, user?.id, pathname, signup]);
 
   // AUTH-01: Google callback redirects here with oauth=denied|failed; surface the outcome.
   useEffect(() => {
@@ -871,7 +873,8 @@ export default function LiveSearch() {
     }
   }
 
-  const authRoutePending = !bootstrapError && (user ? pathname === loginPath : pathname !== loginPath);
+  const onAuthPage = pathname === loginPath || pathname === signupPath;
+  const authRoutePending = !bootstrapError && (user ? onAuthPage : !onAuthPage || (mode === 'register' && !signup));
   if (booting || authRoutePending) {
     return (
       <div className="dash">
@@ -900,7 +903,7 @@ export default function LiveSearch() {
             <p>
               {demo
                 ? 'Demo mode: sign in as demo@carecredits.local to review fixtures and personal tracking. Live Tavily/model discovery needs configured credentials.'
-                : signup
+                : mode === 'register'
                   ? 'Register, then search Malaysian CPD courses from the original dashboard.'
                   : 'Sign in to search Malaysian CPD courses from the original dashboard.'}
             </p>
@@ -952,8 +955,10 @@ export default function LiveSearch() {
               <button
                 type="button"
                 className="text-link"
+                disabled={busy}
                 onClick={() => {
-                  setMode(mode === 'register' ? 'signin' : 'register');
+                  const next = new URLSearchParams(window.location.search).get('next');
+                  window.history.pushState(null, '', authPathFor(mode === 'register' ? loginPath : signupPath, next));
                   setError('');
                 }}
               >
@@ -1025,7 +1030,6 @@ export default function LiveSearch() {
                 setUser(null);
                 // Explicit sign-out starts the next session at Overview, without a return destination.
                 window.history.replaceState(null, '', loginPath);
-                setMode('signin');
                 setOpen(false);
                 setCourses([]);
                 setSelected(null);

@@ -11,6 +11,7 @@ export const dashboardPaths = {
 export type DashboardPage = keyof typeof dashboardPaths;
 
 export const loginPath = '/log_in';
+export const signupPath = '/sign_up';
 
 export function dashboardReturnPath(pathname: string | null): string {
   // Only known dashboard pages can be a post-login destination.
@@ -18,9 +19,9 @@ export function dashboardReturnPath(pathname: string | null): string {
     ? pathname : '/';
 }
 
-export function loginPathFor(pathname: string): string {
-  const next = dashboardReturnPath(pathname);
-  return next === '/' ? loginPath : `${loginPath}?next=${encodeURIComponent(next)}`;
+export function authPathFor(path: typeof loginPath | typeof signupPath, returnTo: string | null): string {
+  const next = dashboardReturnPath(returnTo);
+  return next === '/' ? path : `${path}?next=${encodeURIComponent(next)}`;
 }
 
 export function dashboardPageFromPath(pathname: string): DashboardPage {

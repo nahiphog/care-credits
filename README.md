@@ -10,7 +10,7 @@ The hackathon application is on **[`codex/v1-integrated-demo`](https://github.co
 
 Each dashboard section has a direct URL: `/overview`, `/my-credits`, `/discover`, `/events`, `/certificates`, `/about-credits` and `/settings`. The homepage `/` opens Overview. Sidebar navigation, refresh and browser Back/Forward select the matching page; signing in from a direct link keeps that destination.
 
-Sign-in and account creation share `/log_in`. Signed-out visitors are sent there with a safe dashboard return destination when needed (for example, `/log_in?next=%2Fsettings`). This survives refresh; signing in from `/log_in` without a destination opens Overview at `/`.
+Sign-in uses `/log_in`; account creation uses `/sign_up`. Switching forms updates the URL, and direct links, refresh and browser Back/Forward show the matching form. Signed-out visitors are sent to sign-in with a safe dashboard return destination when needed (for example, `/log_in?next=%2Fsettings`). This destination survives switching forms and refresh; authentication without a destination opens Overview at `/`. If registration is disabled, `/sign_up` returns to sign-in.
 
 - Search the published Malaysian CPD catalogue and filter by location, date and delivery mode.
 - Inspect course details, advertised credits and provider/source links before registering externally.

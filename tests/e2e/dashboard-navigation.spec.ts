@@ -38,7 +38,11 @@ test('all seven sidebar links have reloadable URLs and matching active pages', a
 test('direct sign-in retains Settings and history preserves search and profile drafts', async ({ page }) => {
   await page.goto('/settings');
   await expect(page).toHaveURL(/\/log_in\?next=%2Fsettings$/);
+  await page.getByRole('button', { name: 'New here? Create an account', exact: true }).click();
+  await expect(page).toHaveURL(/\/sign_up\?next=%2Fsettings$/);
   await page.reload();
+  await expect(page.getByRole('heading', { name: 'Create your workspace', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Already have an account? Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/log_in\?next=%2Fsettings$/);
   await signIn(page);
   await expect(page).toHaveURL(/\/settings$/);
@@ -63,13 +67,22 @@ test('direct sign-in retains Settings and history preserves search and profile d
   await expect(page.locator('#page-heading')).toHaveText('Discover');
 });
 
-test('sign-in and signup share the login URL and logout starts a fresh Overview session', async ({ page }) => {
+test('sign-in and signup have distinct URLs and logout starts a fresh Overview session', async ({ page }) => {
   // Share login coverage across demo actors without weakening the per-account rate limit.
   await page.goto('/log_in');
   await page.getByRole('button', { name: 'New here? Create an account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Create your workspace', exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/\/log_in$/);
+  await expect(page).toHaveURL(/\/sign_up$/);
+  await page.reload();
+  await expect(page.getByLabel('Your name', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/sign_up$/);
   await page.getByRole('button', { name: 'Already have an account? Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/log_in$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/sign_up$/);
+  await expect(page.getByRole('heading', { name: 'Create your workspace', exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: 'Sign in to search', exact: true })).toBeVisible();
   await signIn(page, 'demo@carecredits.local');
   await expect(page.locator('#page-heading')).toHaveText('Overview');
   expect(new URL(page.url()).pathname).toBe('/');
@@ -85,6 +98,18 @@ test('sign-in and signup share the login URL and logout starts a fresh Overview 
   await page.goto('/log_in');
   await expect(page.locator('#page-heading')).toHaveText('Overview');
   expect(new URL(page.url()).pathname).toBe('/');
+  await page.goto('/sign_up');
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  expect(new URL(page.url()).pathname).toBe('/');
+});
+
+test('disabled signup returns to sign-in while preserving the intended dashboard page', async ({ page }) => {
+  await page.route('**/api/v1/config', route => route.fulfill({ json: { signup_enabled: false, demo: true } }));
+  await page.goto('/sign_up?next=%2Fsettings');
+  await expect(page).toHaveURL(/\/log_in\?next=%2Fsettings$/);
+  await expect(page.getByRole('heading', { name: 'Sign in to search', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Your name', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New here? Create an account', exact: true })).toHaveCount(0);
 });
 
 test('login rejects an external return destination', async ({ page }) => {
