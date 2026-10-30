@@ -1773,7 +1773,7 @@ class PortalTests(unittest.TestCase):
             migrate_schema(db)
             stored=db.get(Course,self.course)
             self.assertEqual((stored.title, stored.city), ('Backfilled GP','Johor Bahru'))
-            self.assertEqual(max(v.version for v in db.query(SchemaVersion).all()), 18)
+            self.assertEqual(max(v.version for v in db.query(SchemaVersion).all()), 19)
             self.assertIn('identity_issuer', {c['name'] for c in inspect(db.get_bind()).get_columns('accounts')})
             self.assertIn('verification_status', {c['name'] for c in inspect(db.get_bind()).get_columns('courses')})
             self.assertIn('publication_status', {c['name'] for c in inspect(db.get_bind()).get_columns('courses')})
@@ -2273,7 +2273,8 @@ class PortalTests(unittest.TestCase):
 
     def test_public_config_is_login_flags_only(self):
         body = self.client.get('/api/v1/config').json()
-        self.assertEqual(set(body), {'demo', 'signup_enabled', 'oauth_google', 'discovery_max_results', 'digest_available', 'password_change_available', 'default_timezone'})
+        self.assertEqual(set(body), {'demo', 'signup_enabled', 'oauth_google', 'discovery_max_results', 'digest_available', 'password_change_available', 'password_recovery_available', 'default_timezone'})
+        self.assertFalse(body['password_recovery_available'])
 
     def test_publish_stores_source_review_and_field_evidence(self):
         from portal_models import FieldEvidence
