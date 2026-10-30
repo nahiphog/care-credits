@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from shared.contracts import canonical_web_url, week_key_for_date
+from scraper.provider_pages import fetch_public_page
 
 
 
@@ -149,6 +150,15 @@ def discover(query, max_results=5):
                 warnings.append("Some pages could not be extracted; their search snippets are retained.")
         except ProviderError as error:
             warnings.append(error.detail + " Search snippets are retained; extraction is incomplete.")
+    # The registered public-page adapter can recover text/links that Tavily omitted.
+    # It never fetches arbitrary hosts or private/member-only content.
+    for source in list(sources.values())[:1]:
+        if source['extraction_status'] == 'failed' or not matching_detail_link(source, query):
+            content = fetch_public_page(source['url'])
+            if content:
+                source.update(raw_content=content, extraction_status='success')
+    if sources and all(s['extraction_status'] == 'success' for s in sources.values()):
+        warnings = [w for w in warnings if w != 'Some pages could not be extracted; their search snippets are retained.']
     # At most one additional extraction per job, and still one model source in
     # single-source mode. A failed detail fetch preserves the directory evidence.
     for original, source in list(sources.items()):
@@ -157,7 +167,8 @@ def discover(query, max_results=5):
             continue
         url, label = target
         try:
-            detail = tavily_post('extract', {'urls': [url], 'extract_depth': 'basic', 'format': 'markdown'}, key)
+            public_text = fetch_public_page(url)
+            detail = {'results': [{'url': url, 'raw_content': public_text}]} if public_text else tavily_post('extract', {'urls': [url], 'extract_depth': 'basic', 'format': 'markdown'}, key)
             credits.append(reported_credits(detail))
             page = next((item for item in detail['results'] if isinstance(item, dict)
                          and source_url(item.get('url')) == url and isinstance(item.get('raw_content'), str)

@@ -51,6 +51,12 @@ This can consume additional provider credits within the existing daily run limit
 Pasting a public course URL into discovery skips search and extracts that page
 directly. Private addresses and credential-bearing URLs are rejected. This also
 works when a directory's extracted content does not retain usable detail links.
+CPD Online additionally has a restricted public-HTML adapter for its directory and
+course paths when extracted text/links are missing. It accepts only HTTPS on
+`cpdonline.my`, refuses query strings/credentials and cross-host redirects, limits
+redirects to three requests, applies a 10-second HTTP timeout and a 250 KB response
+cap, and removes scripts/styles. It never logs in or reads protected lesson content.
+No extra model call is made for this fallback. Other providers still use Tavily.
 
 Extraction warnings distinguish HTTP/network errors, truncated output, invalid JSON,
 empty model results, schema fields and evidence failures. They never include raw
