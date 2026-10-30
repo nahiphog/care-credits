@@ -27,6 +27,16 @@ class ModelTests(unittest.TestCase):
             return httpx.Response(status,json={'choices':[{'message':{'content':json.dumps({'trainings':[row]})}}],'usage':{'prompt_tokens':11,'completion_tokens':19,'total_tokens':30}})
         return httpx.Client(transport=httpx.MockTransport(handler))
 
+    def test_null_optional_description_does_not_discard_valid_identity(self):
+        with self.client({**self.row, 'description': None}) as client:
+            rows=extract_training(self.source,client)
+        self.assertEqual(rows[0]['description'],'')
+        for field in ('provider','mode'):
+            with self.subTest(field=field), self.client({**self.row, field: None}) as client:
+                with self.assertRaises(ExtractionError) as caught:
+                    extract_training(self.source,client)
+                self.assertIn(field,str(caught.exception))
+
     def test_diagnostics_distinguish_empty_truncated_and_invalid_evidence(self):
         import json
         cases = [

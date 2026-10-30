@@ -43,6 +43,18 @@ its stored result. A discovery run with no source pages does not prove a model
 call occurred; the UI reports this explicitly. Only evidence-backed candidates
 should be published, with missing claims left unknown.
 
+Directory results preserve Markdown links. Discovery may follow one unambiguous,
+query-matching course-detail link on the same hostname, with at most one additional
+Tavily extraction per job and no recursive crawling. It replaces the directory as
+the model source; a failed fetch retains the directory and reports the failure.
+This can consume additional provider credits within the existing daily run limit.
+
+Extraction warnings distinguish HTTP/network errors, truncated output, invalid JSON,
+empty model results, schema fields and evidence failures. They never include raw
+model values, response bodies or credentials. Optional null descriptions become
+empty text; missing provider or mode still rejects the record. Model instructions
+distinguish publication dates from course dates and accreditors from providers.
+
 `scripts/verify_live_discovery.py` is an opt-in, one-run live check scoped to the
 existing production origin. It creates a temporary test identity, retains the run
 for the permanent operator, verifies terminal-repeat idempotency and removes that

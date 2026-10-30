@@ -1,6 +1,8 @@
 """Bounded Tavily discovery. Returned sources are not verified CPD events."""
 import json
 import os
+import re
+from urllib.parse import urljoin, urlsplit
 from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -72,6 +74,30 @@ def source_url(value):
     return canonical_web_url(value)
 
 
+def matching_detail_link(source, query):
+    """One same-site course link, selected by query overlap; never crawl recursively."""
+    detail = re.compile(r'/(?:courses?|events?|webinars?|workshops?)/[^/]+', re.I)
+    if detail.search(urlsplit(source['url']).path):
+        return None
+    words = set(re.findall(r'[a-z0-9]{4,}', query.casefold())) - {
+        'https', 'http', 'course', 'courses', 'medical', 'malaysia', 'online', 'training', 'www'}
+    matches = []
+    for label, href in re.findall(r'\[([^\]\n]{1,500})\]\(([^\s)]+)\)', (source.get('raw_content') or '')[:50000]):
+        url = source_url(urljoin(source['url'], href))
+        if not url or urlsplit(url).hostname != urlsplit(source['url']).hostname or not detail.search(urlsplit(url).path):
+            continue
+        score = len(words & set(re.findall(r'[a-z0-9]{4,}', (label + ' ' + urlsplit(url).path).casefold())))
+        if score >= 2:
+            matches.append((score, url, label))
+    if not matches:
+        return None
+    # Ambiguous equal matches should not silently select a different course.
+    matches = sorted(set(matches), reverse=True)
+    if len(matches) > 1 and matches[0][0] == matches[1][0] and matches[0][1] != matches[1][1]:
+        return None
+    return matches[0][1:]
+
+
 def discover(query, max_results=5):
     key = os.getenv("TAVILY_API_KEY", "").strip()
     if not key:
@@ -99,7 +125,7 @@ def discover(query, max_results=5):
     if sources:
         try:
             extracted = tavily_post("extract", {
-                "urls": list(sources), "extract_depth": "basic", "format": "text",
+                "urls": list(sources), "extract_depth": "basic", "format": "markdown",
             }, key)
             credits.append(reported_credits(extracted))
             for item in extracted["results"]:
@@ -114,6 +140,28 @@ def discover(query, max_results=5):
                 warnings.append("Some pages could not be extracted; their search snippets are retained.")
         except ProviderError as error:
             warnings.append(error.detail + " Search snippets are retained; extraction is incomplete.")
+    # At most one additional extraction per job, and still one model source in
+    # single-source mode. A failed detail fetch preserves the directory evidence.
+    for original, source in list(sources.items()):
+        target = matching_detail_link(source, query)
+        if not target:
+            continue
+        url, label = target
+        try:
+            detail = tavily_post('extract', {'urls': [url], 'extract_depth': 'basic', 'format': 'markdown'}, key)
+            credits.append(reported_credits(detail))
+            page = next((item for item in detail['results'] if isinstance(item, dict)
+                         and source_url(item.get('url')) == url and isinstance(item.get('raw_content'), str)
+                         and item['raw_content'].strip()), None)
+            if page:
+                del sources[original]
+                sources[url] = {**source, 'url': url, 'title': label, 'snippet': '',
+                                'raw_content': page['raw_content'], 'extraction_status': 'success'}
+            else:
+                warnings.append('Matched course detail could not be fetched; directory evidence retained.')
+        except ProviderError as error:
+            warnings.append(error.detail + ' Matched course detail unavailable; directory evidence retained.')
+        break
     known = [value for value in credits if value is not None]
     retrieved_at = datetime.now(timezone.utc).isoformat()
     week_key = week_key_for_date(None)

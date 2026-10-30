@@ -54,6 +54,40 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(result['retrieved_at'])
         self.assertNotIn('test-only', json.dumps(result))
 
+    def test_directory_follows_one_matching_same_site_detail(self):
+        listing='https://example.org/modules'
+        detail='https://example.org/courses/work-related-musculoskeletal-disorders/'
+        markdown=f'[View course outline]({detail})'
+        replies=[{'results':[{'url':listing}]},
+                 {'results':[{'url':listing,'raw_content':markdown}], 'usage':{'credits':1}},
+                 {'results':[{'url':detail,'raw_content':'Medcomet online course details'}], 'usage':{'credits':1}}]
+        with patch.object(d,'tavily_post',side_effect=replies) as call:
+            result=d.discover('work related musculoskeletal disorders',1)
+        self.assertEqual(call.call_count,3)
+        self.assertEqual(result['sources'][0]['url'],d.source_url(detail))
+        self.assertEqual(len(result['sources']),1)
+        self.assertEqual(result['usage']['tavily_credits'],2)
+        self.assertEqual(result['warnings'],[])
+
+    def test_detail_selection_rejects_external_ambiguous_and_recursive_links(self):
+        source={'url':'https://example.org/modules','raw_content':'[Work related course](https://evil.org/courses/work-related/)'}
+        self.assertIsNone(d.matching_detail_link(source,'work related'))
+        source['raw_content']='[Work related A](/courses/work-related-a/) [Work related B](/courses/work-related-b/)'
+        self.assertIsNone(d.matching_detail_link(source,'work related'))
+        source['url']='https://example.org/courses/existing/'
+        self.assertIsNone(d.matching_detail_link(source,'work related A'))
+        source={'url':'https://example.org/modules','raw_content':'[Work related](http://127.0.0.1/courses/work-related/)'}
+        self.assertIsNone(d.matching_detail_link(source,'work related'))
+
+    def test_failed_detail_fetch_retains_directory_and_does_not_retry(self):
+        listing='https://example.org/modules'
+        replies=[{'results':[{'url':listing}]}, {'results':[{'url':listing,'raw_content':'[Work related](/courses/work-related/)'}]}, HTTPException(504,'Unavailable')]
+        with patch.object(d,'tavily_post',side_effect=replies) as call:
+            result=d.discover('work related',1)
+        self.assertEqual(call.call_count,3)
+        self.assertEqual(result['sources'][0]['url'],listing)
+        self.assertIn('directory evidence retained',result['warnings'][0])
+
     def test_discover_records_reported_credits(self):
         replies = [
             {'results': [{'url': 'https://example.org/event', 'title': 'Course', 'content': 'Snippet'}], 'usage': {'credits': 1}},
