@@ -246,7 +246,7 @@ class PortalAccessibilityTests(unittest.TestCase):
         self.assertIn('Searching…', live)
         self.assertIn('live-search-empty', live)
         self.assertNotIn("useState('upcoming')", live)
-        self.assertIn('Operator and doctor workspace', live)
+        self.assertNotIn('href="/workspace"', live)
         self.assertNotIn("'Messages'", live)
         self.assertNotIn("'Learning Hub'", live)
         self.assertIn('canCancel={user?.role === \'operator\'}', live)

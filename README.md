@@ -4,7 +4,7 @@ Care Credits helps Malaysian doctors find CPD courses, inspect the provider's so
 
 **[Open the application](https://care-credits-hackathon.vercel.app/) · [Judge walkthrough](docs/JUDGE_WALKTHROUGH.md) · [Local setup](docs/SETUP.md)**
 
-The hackathon application is on **[`codex/v1-integrated-demo`](https://github.com/nahiphog/care-credits/tree/codex/v1-integrated-demo)**. Clone that branch explicitly: `main` is not the integrated application. The dashboard opens at `/`, with operator tools at `/workspace`; earlier dashboard experiments are archived.
+The hackathon application is on **[`codex/v1-integrated-demo`](https://github.com/nahiphog/care-credits/tree/codex/v1-integrated-demo)**. Clone that branch explicitly: `main` is not the integrated application. The dashboard opens at `/`, with discovery and review tools shown to operators in **Discover** and **Overview**. The alternate `/workspace` route remains available for compatibility; earlier dashboard experiments are archived.
 
 ## What you can try
 

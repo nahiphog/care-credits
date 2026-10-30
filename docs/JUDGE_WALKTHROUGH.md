@@ -50,7 +50,7 @@ Expected: a saved Care Credits affiliation record for **Dr Daniel Tan**, with hi
 ### 4. Review and publish as an operator
 
 1. Sign out, then sign in as `demo@carecredits.local`.
-2. Open the **Operator and doctor workspace**, then **Training sources**.
+2. Open **Discover** or **Overview** in the main dashboard. Operator discovery and review tools appear alongside the catalogue.
 3. Find the **Fixture review queue** and open a pending candidate such as **Asthma updates for GPs (demo)**.
 4. Inspect its captured source text and field evidence. The text explicitly identifies a fictional demonstration source.
 5. Publish the candidate using the review controls. Return to the dashboard and search its exact title.
@@ -61,7 +61,7 @@ This proves the review → publication → search path with local data. It is **
 
 ### 5. Inspect operational controls
 
-In **Training sources**, expand **Advanced tools & connection details**, then **Maintenance and catalogue quality** and use **Refresh checks**.
+In the dashboard's operator discovery panel, expand **Advanced tools & connection details**, then **Maintenance and catalogue quality** and use **Refresh checks**.
 
 Expected: the operator can inspect catalogue-quality findings and maintenance information. A newly created local database may have no maintenance receipt; missing live integrations are expected without credentials. A doctor account does not gain operator actions merely by opening `/workspace`.
 

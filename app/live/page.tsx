@@ -980,14 +980,6 @@ export default function LiveSearch() {
               </button>
             ))}
           </nav>
-          <div className="nav-rule" />
-          <p className="nav-heading">FULL WORKSPACE</p>
-          <nav>
-            <a className="nav-item" href="/workspace" aria-label="Open full CareCredits workspace">
-              <Settings />
-              <span>Operator and doctor workspace</span>
-            </a>
-          </nav>
           <div className="profile">
             <span className="avatar">{initials(user.name)}</span>
             <div>
@@ -1562,9 +1554,6 @@ export default function LiveSearch() {
                       ? excludedCopy(progress)
                       : 'Opening a source does not register you with the provider.'}
                   </p>
-                  <a className="text-link" href="/workspace">
-                    Open full workspace <ChevronRight />
-                  </a>
                 </section>}
                 {tab === 'Settings' && <PasswordSettings />}
                 {tab === 'About credits' && (
