@@ -11,6 +11,7 @@ export const dashboardPaths = {
 export type DashboardPage = keyof typeof dashboardPaths;
 
 export function dashboardPageFromPath(pathname: string): DashboardPage {
+  if (pathname === '/') return 'Overview';
   return (Object.keys(dashboardPaths) as DashboardPage[])
     .find((page) => dashboardPaths[page] === pathname) ?? 'Discover';
 }

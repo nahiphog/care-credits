@@ -10,6 +10,11 @@ async function signIn(page: Page) {
 test('all seven sidebar links have reloadable URLs and matching active pages', async ({ page }) => {
   await page.goto('/');
   await signIn(page);
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  await expect(page.getByRole('link', { name: 'Overview', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.reload();
+  await expect(page.locator('#page-heading')).toHaveText('Overview');
+  expect(new URL(page.url()).pathname).toBe('/');
   const destinations = [
     ['Overview', '/overview'], ['My Credits', '/my-credits'],
     ['Discover', '/discover'], ['Events', '/events'],

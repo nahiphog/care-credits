@@ -77,6 +77,12 @@
   .dash .filter-dialog .filter-actions { bottom: 0; }
 }
 .dash .page-heading { font-size:24px; margin:6px 0 18px; outline:none; }
+/* The Overview landing panel must fit beside the desktop sidebar. */
+.dash .progress-panel { flex-wrap:wrap; }
+@media (max-width:1100px) {
+  .dash .hero { flex-direction:column; align-items:stretch; }
+  .dash .progress-panel { width:100%; }
+}
 .dash .dashboard-grid.single-feature { grid-template-columns:minmax(0,1fr); }
 .dash .dashboard-grid.single-feature > .right-column { width:100%; max-width:980px; }
 .dash .left-column, .dash .right-column, .dash .event-name, .dash .profile > div { min-width:0; }
