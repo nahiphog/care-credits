@@ -73,7 +73,7 @@ class OAuthTests(unittest.TestCase):
         self.assertIn('oauth_state', result.headers.get('set-cookie', '').lower())
 
     def test_default_redirect_uri_uses_frontend_base(self):
-        from oauth import redirect_uri
+        from services.oauth_service import redirect_uri
 
         with patch.dict(
             os.environ,
@@ -157,9 +157,9 @@ class OAuthTests(unittest.TestCase):
             self.assertIn('oauth=failed', bad.headers['location'])
             self.assertIn('oauth_state', bad.headers.get('set-cookie', '').lower())
             # Provider/account OAuthError maps to the demo shell instead of a raw JSON page.
-            from oauth import OAuthError
+            from services.oauth_service import OAuthError
 
-            with patch('main.exchange_code', side_effect=OAuthError('Google rejected the sign-in request.', 401)):
+            with patch('routers.auth.exchange_code', side_effect=OAuthError('Google rejected the sign-in request.', 401)):
                 self.client.cookies.set('oauth_state', 'good-state')
                 failed = self.client.get(
                     '/api/v1/auth/oauth/google/callback?code=abc&state=good-state',
@@ -195,7 +195,7 @@ class OAuthTests(unittest.TestCase):
         with patch.dict(
             os.environ,
             {'GOOGLE_CLIENT_ID': 'cid.apps.googleusercontent.com', 'GOOGLE_CLIENT_SECRET': 'secret'},
-        ), patch('main.client_host', return_value=peer):
+        ), patch('routers.auth.client_host', return_value=peer):
             self.client.cookies.set('oauth_state', 'throttle-state', domain='testserver.local', path='/')
             blocked = self.client.get(
                 '/api/v1/auth/oauth/google/callback?code=abc&state=throttle-state',
@@ -211,7 +211,7 @@ class OAuthTests(unittest.TestCase):
 
     def test_callback_success_rotates_presented_session(self):
         from database import Base, SessionLocal, engine
-        from oauth import issue_session
+        from services.oauth_service import issue_session
         from portal_models import Account, LoginSession
         from security import digest, password_hash
 
@@ -235,10 +235,10 @@ class OAuthTests(unittest.TestCase):
             os.environ,
             {'GOOGLE_CLIENT_ID': 'cid.apps.googleusercontent.com', 'GOOGLE_CLIENT_SECRET': 'secret'},
         ), patch(
-            'main.exchange_code',
+            'routers.auth.exchange_code',
             return_value={'email': 'oauth-rotate@example.com', 'name': 'OAuth Rotate', 'subject': 'google-rotate-1'},
         ), patch(
-            'main.upsert_account',
+            'routers.auth.upsert_account',
             side_effect=lambda db, identity, allow: db.query(Account).filter_by(id=account_id).one(),
         ):
             result = self.client.get(
@@ -262,7 +262,7 @@ class OAuthTests(unittest.TestCase):
 
     def test_upsert_stores_google_subject(self):
         from database import Base, SessionLocal, engine
-        from oauth import upsert_account
+        from services.oauth_service import upsert_account
         from portal_models import Account
         from security import password_hash
         Base.metadata.create_all(engine)
@@ -281,7 +281,7 @@ class OAuthTests(unittest.TestCase):
 
     def test_upsert_rejects_subject_mismatch_on_same_email(self):
         from database import Base, SessionLocal, engine
-        from oauth import upsert_account, OAuthError
+        from services.oauth_service import upsert_account, OAuthError
         from portal_models import Account
         from security import password_hash
         Base.metadata.create_all(engine)
@@ -301,3 +301,33 @@ class OAuthTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GoogleIdentityClaimsTests(unittest.TestCase):
+    def exchange(self, changes):
+        import httpx
+        from services.oauth_service import exchange_code
+        claims = {'aud': 'test-client', 'iss': 'https://accounts.google.com',
+                  'email': 'Doctor@example.com', 'email_verified': True, 'sub': 'google-subject'}
+        claims.update(changes)
+        def respond(request):
+            return httpx.Response(200, json=claims if request.url.path == '/tokeninfo' else {'id_token': 'test-token'})
+        with patch.dict(os.environ, {'GOOGLE_CLIENT_ID': 'test-client', 'GOOGLE_CLIENT_SECRET': 'test-secret'}), httpx.Client(transport=httpx.MockTransport(respond)) as client:
+            return exchange_code('test-code', client)
+
+    def test_requires_explicit_verified_email(self):
+        from services.oauth_service import OAuthError
+        for value in (None, False, 'false', '', 1, 'TRUE'):
+            with self.subTest(value=value), self.assertRaises(OAuthError) as raised:
+                self.exchange({'email_verified': value})
+            self.assertEqual(raised.exception.status_code, 401)
+        for value in (True, 'true'):
+            self.assertEqual(self.exchange({'email_verified': value})['email'], 'doctor@example.com')
+
+    def test_requires_nonempty_untruncated_subject(self):
+        from services.oauth_service import OAuthError
+        for value in (None, '', '   ', 123, 'x' * 201):
+            with self.subTest(value=value), self.assertRaises(OAuthError) as raised:
+                self.exchange({'sub': value})
+            self.assertEqual(raised.exception.status_code, 401)
+        self.assertEqual(self.exchange({'sub': 'stable-subject'})['subject'], 'stable-subject')

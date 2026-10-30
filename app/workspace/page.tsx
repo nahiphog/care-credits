@@ -21,16 +21,16 @@ import { LoginForm } from '@/components/LoginForm';
 import { OverviewPanel } from '@/components/OverviewPanel';
 import { DiscoverPanel, DiscoverFilters, LearningFilters } from '@/components/DiscoverPanel';
 import { ProfilePanel } from '@/components/ProfilePanel';
-import { IngestionPanel } from '@/components/IngestionPanel';
+import { LiveIngestion } from '@/components/LiveIngestion';
 import { TrainingDetail } from '@/components/TrainingDetail';
+import { PasswordSettings } from '@/components/PasswordSettings';
 import {
   api,
+  ApiError,
   AuditItem,
   calendarYearLocal,
-  Candidate,
   Course,
   emptyRecord,
-  Job,
   normalizeRecordEdit,
   Progress,
   RecordData,
@@ -47,7 +47,7 @@ const initialFilters: DiscoverFilters = {
   difficulty: '',
   maxFee: '',
   minPoints: '',
-  period: 'upcoming',
+  period: 'all',
   dateFrom: '',
   dateTo: '',
   includeUnknown: false,
@@ -58,6 +58,10 @@ const initialFilters: DiscoverFilters = {
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
+  const [profileDraft, setProfileDraft] = useState<User | null>(null);
+  const [bootstrapError, setBootstrapError] = useState('');
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [digestAvailable, setDigestAvailable] = useState(false);
   const [booting, setBooting] = useState(true);
   const [demo, setDemo] = useState(false);
   const [signup, setSignup] = useState(false);
@@ -66,6 +70,30 @@ export default function Home() {
   const [historyFailed, setHistoryFailed] = useState(false);
   const [tab, setTab] = useState<WorkspaceTab>('Overview');
   const [navOpen, setNavOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const match = window.matchMedia('(max-width: 850px)');
+    const update = () => setMobile(match.matches);
+    update(); match.addEventListener('change', update);
+    return () => match.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (!mobile || !navOpen) return;
+    const previous = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    navRef.current?.querySelector<HTMLElement>('button')?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setNavOpen(false); menuRef.current?.focus(); }
+      if (event.key !== 'Tab') return;
+      const nodes = Array.from(navRef.current?.querySelectorAll<HTMLElement>('button,a[href]') || []);
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', key);
+    return () => { document.body.style.overflow = previous; document.removeEventListener('keydown', key); };
+  }, [mobile, navOpen]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -82,11 +110,6 @@ export default function Home() {
   const [auditFailed, setAuditFailed] = useState(false);
   const [digestFailed, setDigestFailed] = useState(false);
   const [progressFailed, setProgressFailed] = useState(false);
-  const [jobsFailed, setJobsFailed] = useState(false);
-  const [candidatesFailed, setCandidatesFailed] = useState(false);
-  const [operatorAuditFailed, setOperatorAuditFailed] = useState(false);
-  const [topicsFailed, setTopicsFailed] = useState(false);
-  const [operatorLoading, setOperatorLoading] = useState(true);
   const [filters, setFilters] = useState<DiscoverFilters>(initialFilters);
   // FIND-01: draft Discover filters for inputs; `filters` is last-successful (pager / Retry honesty).
   const [draftFilters, setDraftFilters] = useState<DiscoverFilters>(initialFilters);
@@ -95,39 +118,12 @@ export default function Home() {
   const [opening, setOpening] = useState(false);
   const [edit, setEdit] = useState<RecordData>(emptyRecord);
   const [saving, setSaving] = useState(false);
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [jobQuery, setJobQuery] = useState('GP CPD courses Kuala Lumpur');
-  const [submitting, setSubmitting] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionsCity, setSuggestionsCity] = useState<string | null>(null);
   const [digestOptIn, setDigestOptIn] = useState(false);
   const [digestBusy, setDigestBusy] = useState(false);
-  const [certBusy, setCertBusy] = useState(false);
   const [year, setYear] = useState(() => calendarYearLocal());
-  const [jobMaxResults, setJobMaxResults] = useState(5);
-  const [jobTotal, setJobTotal] = useState(0);
-  const [jobPage, setJobPage] = useState(1);
-  const [jobStatus, setJobStatus] = useState('');
-  const [jobFilterOptions, setJobFilterOptions] = useState<Job[]>([]);
-  const [candidateTotal, setCandidateTotal] = useState(0);
-  const [candidatePage, setCandidatePage] = useState(1);
-  const [candidateStatus, setCandidateStatus] = useState('awaiting');
-  const [candidateJobId, setCandidateJobId] = useState('');
   const [audits, setAudits] = useState<AuditItem[]>([]);
-  const [operatorAudits, setOperatorAudits] = useState<AuditItem[]>([]);
-  const [topics, setTopics] = useState<{ query: string; max_results: number }[]>([]);
-  const [scrapeCeiling, setScrapeCeiling] = useState<number | null>(null);
-  const [scrapeDay, setScrapeDay] = useState('');
-  const [forceScrape, setForceScrape] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState<{
-    enqueued: number;
-    skipped: number;
-    day: string;
-    ceiling: number;
-    topics: number;
-  } | null>(null);
-  const [digestResult, setDigestResult] = useState<{ sent: number; failed: number; day: string } | null>(null);
   const [learning, setLearning] = useState<LearningFilters>({ signupStatus: '', attended: '', page: 1 });
   // FIND-01: draft My learning filters; `learning` is last-successful (parity with /live loadLearning).
   const [draftLearning, setDraftLearning] = useState<LearningFilters>({
@@ -136,9 +132,7 @@ export default function Home() {
     page: 1,
   });
   const [recordsTotal, setRecordsTotal] = useState(0);
-  const jobKey = useRef('');
   const retryRef = useRef<(() => void) | null>(null);
-  const operatorBoot = useRef(true);
   const progressRequest = useRef(0);
   const learningRequest = useRef(0);
   const catalogueRequest = useRef(0);
@@ -150,7 +144,7 @@ export default function Home() {
   // Shared saving flag (detail / profile / ingestion): generation so a stale finally cannot clear a newer busy state.
   const savingGen = useRef(0);
   const userRef = useRef(user);
-  userRef.current = user;
+  useEffect(() => { userRef.current = user; }, [user]);
 
   function beginSaving() {
     const gen = ++savingGen.current;
@@ -175,12 +169,23 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       api('/config').then((c) => {
-        setDemo(c.demo);
+        setDemo(c.demo); setDigestAvailable(!!c.digest_available);
         setSignup(c.signup_enabled);
         setOauth(!!c.oauth_google);
       }),
-      api('/me').then(setUser).catch(() => {}),
-    ]).finally(() => setBooting(false));
+      api('/me').then((account) => { setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account); }).catch((error) => { if (!(error instanceof ApiError && error.status === 401)) throw error; }),
+    ]).catch((error) => setBootstrapError(error.message || 'CareCredits could not be reached.')).finally(() => setBooting(false));
+  }, [bootstrapAttempt]);
+  useEffect(() => {
+    const expired = (event: Event) => {
+      if (!userRef.current) return;
+      userRef.current = null;
+      ++catalogueRequest.current; ++learningRequest.current; ++progressRequest.current; ++detailRequest.current; ++operatorRequest.current; ++savingGen.current;
+      setUser(null); setSelected(null); setCourses([]); setRecords([]); setProgress(null); setSuggestions([]); setAudits([]);
+      setError((event as CustomEvent<string>).detail || 'Your session has expired. Please sign in again.');
+    };
+    window.addEventListener('carecredits:session-expired', expired);
+    return () => window.removeEventListener('carecredits:session-expired', expired);
   }, []);
 
   const refreshRecords = useCallback(async (opts?: {
@@ -333,7 +338,7 @@ export default function Home() {
 
   useEffect(() => {
     if (user) refreshRecords().catch((e) => fail(e, () => refreshRecords()));
-  }, [user, draftLearning, year]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: draft filter changes reload records
+  }, [user?.id, draftLearning, year]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: draft filter changes reload records
 
   useEffect(() => {
     if (!user) return;
@@ -341,133 +346,9 @@ export default function Home() {
       loadCourses().catch((e) => fail(e, () => loadCourses()));
     }, 250);
     return () => clearTimeout(timer);
-  }, [user, draftFilters]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: draft filter debounce
+  }, [user?.id, draftFilters]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: draft filter debounce
 
-  const refreshOperator = useCallback(async (overrides?: {
-    candidateStatus?: string;
-    candidateJobId?: string;
-    candidatePage?: number;
-    jobStatus?: string;
-    jobPage?: number;
-  }) => {
-    const requestId = ++operatorRequest.current;
-    if (operatorBoot.current) setOperatorLoading(true);
-    const statusFilter = overrides?.candidateStatus ?? candidateStatus;
-    const jobFilter = overrides?.candidateJobId ?? candidateJobId;
-    const jobStatusFilter = overrides?.jobStatus ?? jobStatus;
-    let firstError: Error | null = null;
-    try {
-      const jobsResult = await Promise.allSettled([
-        (async () => {
-          let currentJobPage = overrides?.jobPage ?? jobPage;
-          while (true) {
-            const jobParams = new URLSearchParams({
-              page: String(currentJobPage),
-              page_size: '20',
-            });
-            if (jobStatusFilter) jobParams.set('status', jobStatusFilter);
-            const jobList = await api('/admin/ingestion-jobs?' + jobParams);
-            if (operatorRequest.current !== requestId) return null;
-            const totalJobs = jobList.total || 0;
-            const jobPageCount = Math.max(1, Math.ceil(totalJobs / 20));
-            if (currentJobPage > jobPageCount) {
-              currentJobPage = jobPageCount;
-              continue;
-            }
-            return { items: jobList.items || [], total: totalJobs, page: currentJobPage };
-          }
-        })(),
-      ]).then((rows) => rows[0]);
-      if (operatorRequest.current !== requestId) return;
-      if (jobsResult.status === 'fulfilled' && jobsResult.value) {
-        setJobs(jobsResult.value.items);
-        setJobTotal(jobsResult.value.total);
-        setJobPage(jobsResult.value.page);
-        // Commit job status filter only after a successful jobs load (parity with candidates).
-        if (overrides?.jobStatus !== undefined) setJobStatus(overrides.jobStatus);
-        setJobsFailed(false);
-      } else if (jobsResult.status === 'rejected') {
-        setJobsFailed(true);
-        firstError =
-          jobsResult.reason instanceof Error ? jobsResult.reason : new Error(String(jobsResult.reason));
-      }
-      try {
-        // Candidate job filter needs jobs beyond the paginated discovery-jobs page (and across status filters).
-        const filterList = await api('/admin/ingestion-jobs?page=1&page_size=50');
-        if (operatorRequest.current !== requestId) return;
-        setJobFilterOptions(filterList.items || []);
-      } catch {
-        // Keep last filter options; discovery-jobs failure is already surfaced above.
-      }
-      try {
-        let current = overrides?.candidatePage ?? candidatePage;
-        while (true) {
-          const params = new URLSearchParams({
-            page: String(current),
-            page_size: '20',
-            status: statusFilter,
-          });
-          if (jobFilter) params.set('job_id', jobFilter);
-          const c = await api('/admin/candidates?' + params);
-          if (operatorRequest.current !== requestId) return;
-          const total = c.total || 0;
-          const pageCount = Math.max(1, Math.ceil(total / 20));
-          if (current > pageCount) {
-            current = pageCount;
-            continue;
-          }
-          setCandidates(c.items || []);
-          setCandidateTotal(total);
-          setCandidatePage(current);
-          // Commit status/job filters only after a successful candidate load.
-          if (overrides?.candidateStatus !== undefined) setCandidateStatus(overrides.candidateStatus);
-          if (overrides?.candidateJobId !== undefined) setCandidateJobId(overrides.candidateJobId);
-          setCandidatesFailed(false);
-          break;
-        }
-      } catch (reason) {
-        setCandidatesFailed(true);
-        if (!firstError) {
-          firstError = reason instanceof Error ? reason : new Error(String(reason));
-        }
-      }
-      try {
-        const topicPayload = await api('/admin/scrape-topics');
-        if (operatorRequest.current !== requestId) return;
-        setTopics(topicPayload.topics || []);
-        setScrapeCeiling(topicPayload.ceiling ?? null);
-        setScrapeDay(topicPayload.day || '');
-        setTopicsFailed(false);
-      } catch {
-        if (operatorRequest.current === requestId) setTopicsFailed(true);
-      }
-      try {
-        const auditPayload = await api('/admin/audit?page=1&page_size=10');
-        if (operatorRequest.current !== requestId) return;
-        setOperatorAudits(auditPayload.items || []);
-        setOperatorAuditFailed(false);
-      } catch {
-        if (operatorRequest.current === requestId) setOperatorAuditFailed(true);
-      }
-      if (firstError) throw firstError;
-    } finally {
-      if (operatorRequest.current === requestId) {
-        operatorBoot.current = false;
-        setOperatorLoading(false);
-      }
-    }
-  }, [candidatePage, candidateStatus, candidateJobId, jobPage, jobStatus]);
-
-  useEffect(() => {
-    if (user?.role !== 'operator' || tab !== 'Ingestion') return;
-    refreshOperator().catch((e) => fail(e, () => refreshOperator()));
-    // Candidate/job status filters commit via explicit refreshOperator overrides (not these deps).
-    // Per-list failed flags drive IngestionPanel stale banners; interval ignores soft refresh errors.
-    const timer = setInterval(() => {
-      refreshOperator().catch(() => {});
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [user, tab, candidatePage, jobPage, refreshOperator]);
+  useEffect(() => { if (!user?.id) return; document.getElementById('main-content')?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }, [tab, user?.id]);
 
   function navigate(next: WorkspaceTab) {
     setTab(next);
@@ -555,22 +436,24 @@ export default function Home() {
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
-    if (!user) return;
+    if (!user || !profileDraft) return;
+    const owner = user.id;
     const gen = beginSaving();
     try {
       const saved = await api('/me', {
         method: 'PATCH',
         body: JSON.stringify({
-          name: user.name,
-          city: user.city,
-          state: user.state || '',
-          bio: user.bio,
-          public_enabled: user.public_enabled,
-          latitude: user.latitude ?? null,
-          longitude: user.longitude ?? null,
+          name: profileDraft.name,
+          city: profileDraft.city,
+          state: profileDraft.state || '',
+          bio: profileDraft.bio,
+          public_enabled: profileDraft.public_enabled,
+          latitude: profileDraft.latitude ?? null,
+          longitude: profileDraft.longitude ?? null,
         }),
       });
-      setUser(saved);
+      if (userRef.current?.id !== owner) return;
+      setUser(saved); setProfileDraft(saved);
       setNotice('Profile settings saved.');
     } catch (e) {
       fail(e, () => saveProfile({ preventDefault() {} } as FormEvent));
@@ -598,89 +481,17 @@ export default function Home() {
     );
   }
 
-  async function newJob(event: FormEvent) {
-    event.preventDefault();
-    setSubmitting(true);
-    setError('');
-    try {
-      if (!jobKey.current) jobKey.current = crypto.randomUUID();
-      await api('/admin/ingestion-jobs', {
-        method: 'POST',
-        headers: { 'Idempotency-Key': jobKey.current },
-        body: JSON.stringify({ query: jobQuery, max_results: jobMaxResults }),
-      });
-      jobKey.current = '';
-      // Reset candidate page only after refresh succeeds (pass override; do not pre-commit).
-      await refreshOperator({ candidatePage: 1 });
-      setNotice('Job queued. The scraper will process it when running.');
-    } catch (e) {
-      fail(e, () => newJob({ preventDefault() {} } as FormEvent));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function review(
-    id: string,
-    action: string,
-    reason = '',
-    version = 0,
-    corrections: Record<string, string> = {},
-    evidence: Record<string, string> = {},
-  ) {
-    const gen = beginSaving();
-    try {
-      await api('/admin/candidates/' + id + '/review', {
-        method: 'POST',
-        body: JSON.stringify({ action, reason, version, corrections, evidence }),
-      });
-      await refreshOperator();
-      await loadCourses();
-      setNotice(
-        action === 'publish'
-          ? 'Training published with source evidence.'
-          : action === 'hold'
-            ? 'Candidate held for later review.'
-            : 'Candidate rejected.',
-      );
-    } catch (e) {
-      // Version 409 / stale card: refresh the queue so Retry does not replay the same version.
-      const message = (e as Error).message || '';
-      if (/changed|refresh|conflict/i.test(message)) {
-        await refreshOperator().catch(() => {});
-        fail(e, () => refreshOperator());
-      } else {
-        fail(e, () => review(id, action, reason, version, corrections, evidence));
-      }
-    } finally {
-      endSaving(gen);
-    }
-  }
-
-  async function retryJob(id: string) {
-    const gen = beginSaving();
-    setError('');
-    try {
-      await api('/admin/ingestion-jobs/' + id + '/retry', { method: 'POST' });
-      await refreshOperator();
-      setNotice('Interrupted job queued again. Paid calls will not repeat until the scraper claims it.');
-    } catch (e) {
-      fail(e, () => retryJob(id));
-    } finally {
-      endSaving(gen);
-    }
-  }
-
   if (booting) {
     return (
       <div className="boot">
-        <Brand />
+        <Brand /><button className="mobile-menu icon-btn" aria-label="Close navigation" onClick={() => { setNavOpen(false); menuRef.current?.focus(); }}><X /></button>
         <Loader2 className="spin" />
         <p id="main-content">Opening your workspace…</p>
       </div>
     );
   }
-  if (!user) return <LoginForm demo={demo} signup={signup} oauth={oauth} onLogin={setUser} />;
+  if (bootstrapError) return <main className="public-page"><section role="alert"><h1>CareCredits is unavailable</h1><p>{bootstrapError}</p><button onClick={() => { setBooting(true); setBootstrapError(''); setBootstrapAttempt((value) => value + 1); }}>Try again</button></section></main>;
+  if (!user) return <>{error && <p role="alert" className="alert error">{error}</p>}<LoginForm demo={demo} signup={signup} oauth={oauth} onLogin={(account) => { setError(''); setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account); }} /></>;
 
   const nav = [
     [LayoutDashboard, 'Overview'],
@@ -690,9 +501,9 @@ export default function Home() {
   ] as const;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell workspace-shell">
       {navOpen && <button className="nav-shade" aria-label="Close navigation" onClick={() => setNavOpen(false)} />}
-      <aside className={'sidebar ' + (navOpen ? 'is-open' : '')}>
+      <aside ref={navRef} id="workspace-navigation" inert={mobile && !navOpen} className={'sidebar ' + (navOpen ? 'is-open' : '')}>
         <Brand />
         <p className="nav-label">YOUR WORKSPACE</p>
         <nav>
@@ -736,7 +547,10 @@ export default function Home() {
             className="icon-btn"
             aria-label="Sign out"
             onClick={async () => {
-              await api('/auth/logout', { method: 'POST' });
+              try { await api('/auth/logout', { method: 'POST' }); } catch (error) { setError((error as Error).message); return; }
+              userRef.current = null;
+              ++catalogueRequest.current; ++learningRequest.current; ++progressRequest.current; ++detailRequest.current; ++operatorRequest.current; ++savingGen.current;
+              setProfileDraft(null);
               setUser(null);
               // Leave Training sources so the next doctor cannot inherit operator Ingestion chrome.
               setTab('Overview');
@@ -750,15 +564,7 @@ export default function Home() {
               setProgressFailed(false);
               setSuggestions([]);
               setSuggestionsCity(null);
-              setCandidateStatus('awaiting');
-              setCandidateJobId('');
-              setJobStatus('');
               setAudits([]);
-              setOperatorAudits([]);
-              setJobs([]);
-              setJobFilterOptions([]);
-              setCandidates([]);
-              setTopics([]);
               setHistory([]);
               setDigestOptIn(false);
               setEdit(emptyRecord);
@@ -768,19 +574,8 @@ export default function Home() {
               setDraftLearning({ signupStatus: '', attended: '', page: 1 });
               pendingDiscover.current = null;
               pendingLearning.current = null;
-              setCandidatePage(1);
-              setJobPage(1);
               setTotal(0);
               setRecordsTotal(0);
-              setCandidateTotal(0);
-              setJobTotal(0);
-              setScrapeResult(null);
-              setDigestResult(null);
-              setScrapeCeiling(null);
-              setScrapeDay('');
-              setForceScrape(false);
-              setJobQuery('GP CPD courses Kuala Lumpur');
-              setJobMaxResults(5);
               setError('');
               setNotice('');
               setSuggestionsFailed(false);
@@ -788,27 +583,21 @@ export default function Home() {
               setDigestFailed(false);
               setRecordsFailed(false);
               setCoursesFailed(false);
-              setJobsFailed(false);
-              setCandidatesFailed(false);
-              setOperatorAuditFailed(false);
-              setTopicsFailed(false);
               setHistoryFailed(false);
               setRecordsLoading(true);
               setCoursesLoading(true);
               // Drop any in-flight Retry so the next account cannot replay a prior cancel/review.
               retryRef.current = null;
               // Reset boot so the next operator session shows Loading… instead of a false empty queue.
-              operatorBoot.current = true;
-              setOperatorLoading(true);
             }}
           >
             <LogOut size={17} />
           </button>
         </div>
       </aside>
-      <main className="main">
+      <main className="main" inert={mobile && navOpen}>
         <header className="topbar">
-          <button className="mobile-menu icon-btn" aria-label="Open navigation" onClick={() => setNavOpen(!navOpen)}>
+          <button ref={menuRef} className="mobile-menu icon-btn" aria-controls="workspace-navigation" aria-expanded={navOpen} aria-label="Open navigation" onClick={() => setNavOpen(!navOpen)}>
             <Menu />
           </button>
           <div className="breadcrumbs">
@@ -818,7 +607,7 @@ export default function Home() {
             <MapPin size={14} /> Malaysia
           </span>
         </header>
-        <div className="content" id="main-content">
+        <div className="content" id="main-content" tabIndex={-1}>
           {demo && (
             <div className="demo-banner">
               <span className="badge">DEMO</span> Example courses are fictional. Live discovery needs configured Tavily
@@ -865,11 +654,11 @@ export default function Home() {
               courses={courses}
               suggestions={suggestions}
               suggestionsCity={suggestionsCity}
+              digestAvailable={digestAvailable}
               digestOptIn={digestOptIn}
               digestBusy={digestBusy}
               digestFailed={digestFailed}
               progressFailed={progressFailed}
-              certBusy={certBusy}
               loading={recordsLoading}
               coursesLoading={coursesLoading}
               coursesFailed={coursesFailed}
@@ -907,22 +696,7 @@ export default function Home() {
                   setDigestBusy(false);
                 }
               }}
-              onIssueCertificate={async () => {
-                setCertBusy(true);
-                setError('');
-                try {
-                  const cert = await api('/me/certificates', {
-                    method: 'POST',
-                    body: JSON.stringify({ year }),
-                  });
-                  window.open('/api/v1/me/certificates/' + cert.id, '_blank', 'noopener');
-                  setNotice('Affiliation certificate ready to print. It is not a regulator document.');
-                } catch (e) {
-                  fail(e, () => refreshRecords());
-                } finally {
-                  setCertBusy(false);
-                }
-              }}
+
             />
           )}
           {(tab === 'Discover training' || tab === 'My learning') && (
@@ -972,109 +746,16 @@ export default function Home() {
             />
           )}
           {tab === 'Public profile' && (
-            <ProfilePanel
-              user={user}
+            <> <ProfilePanel
+              user={profileDraft || user}
               saving={saving}
-              onUser={setUser}
+              onUser={setProfileDraft}
               onSave={saveProfile}
               onLocateError={(message) => fail(new Error(message), locate)}
-            />
+            /><PasswordSettings /></>
           )}
           {tab === 'Ingestion' && user.role === 'operator' && (
-            <IngestionPanel
-              jobQuery={jobQuery}
-              jobMaxResults={jobMaxResults}
-              jobs={jobs}
-              jobPage={jobPage}
-              jobTotal={jobTotal}
-              jobStatus={jobStatus}
-              jobFilterOptions={jobFilterOptions}
-              candidates={candidates}
-              candidatePage={candidatePage}
-              candidateTotal={candidateTotal}
-              candidateStatus={candidateStatus}
-              candidateJobId={candidateJobId}
-              submitting={submitting}
-              saving={saving}
-              jobKey={jobKey}
-              onJobQuery={setJobQuery}
-              onJobMaxResults={setJobMaxResults}
-              onSubmit={newJob}
-              onRefresh={() => refreshOperator().catch((e) => fail(e, () => refreshOperator()))}
-              onRetry={retryJob}
-              onReview={review}
-              onJobPage={(page) => {
-                // Commit job page only after a successful jobs load (parity with status filters / /live).
-                refreshOperator({ jobPage: page }).catch((e) =>
-                  fail(e, () => refreshOperator({ jobPage: page })),
-                );
-              }}
-              onJobStatus={(value) => {
-                refreshOperator({ jobStatus: value, jobPage: 1 }).catch((e) =>
-                  fail(e, () => refreshOperator({ jobStatus: value, jobPage: 1 })),
-                );
-              }}
-              onCandidatePage={(page) => {
-                // Commit candidate page only after a successful load (parity with status filters / /live).
-                refreshOperator({ candidatePage: page }).catch((e) =>
-                  fail(e, () => refreshOperator({ candidatePage: page })),
-                );
-              }}
-              onCandidateStatus={(value) => {
-                refreshOperator({ candidateStatus: value, candidatePage: 1 }).catch((e) =>
-                  fail(e, () => refreshOperator({ candidateStatus: value, candidatePage: 1 })),
-                );
-              }}
-              onCandidateJobId={(value) => {
-                refreshOperator({ candidateJobId: value, candidatePage: 1 }).catch((e) =>
-                  fail(e, () => refreshOperator({ candidateJobId: value, candidatePage: 1 })),
-                );
-              }}
-              loading={operatorLoading}
-              jobsFailed={jobsFailed}
-              candidatesFailed={candidatesFailed}
-              auditFailed={operatorAuditFailed}
-              topicsFailed={topicsFailed}
-              topics={topics}
-              ceiling={scrapeCeiling}
-              scrapeDay={scrapeDay}
-              forceScrape={forceScrape}
-              onForceScrape={setForceScrape}
-              scrapeResult={scrapeResult}
-              digestResult={digestResult}
-              audits={operatorAudits}
-              onDailyScrape={async () => {
-                const gen = beginSaving();
-                setError('');
-                try {
-                  const result = await api('/admin/daily-scrape?force=' + String(forceScrape), { method: 'POST' });
-                  setScrapeResult(result);
-                  await refreshOperator();
-                  setNotice(
-                    `Daily scrape ${result.day}: ${result.enqueued} queued, ${result.skipped} skipped (ceiling ${result.ceiling}).`,
-                  );
-                } catch (e) {
-                  fail(e, () => refreshOperator());
-                } finally {
-                  endSaving(gen);
-                }
-              }}
-              onRunDigests={async () => {
-                const gen = beginSaving();
-                setError('');
-                try {
-                  const result = await api('/admin/digests/run', { method: 'POST' });
-                  setDigestResult(result);
-                  setNotice(
-                    `Digest ${result.day}: ${result.sent} sent, ${result.failed} failed. No Tavily call.`,
-                  );
-                } catch (e) {
-                  fail(e, () => refreshOperator());
-                } finally {
-                  endSaving(gen);
-                }
-              }}
-            />
+            <LiveIngestion onPublished={async () => { await Promise.all([loadCourses(), refreshRecords()]); }} />
           )}
           <footer>
             CareCredits <span>Built around your professional growth.</span>

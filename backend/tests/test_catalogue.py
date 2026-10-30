@@ -23,19 +23,23 @@ os.environ.pop('TYPESAFE_API_KEY', None)
 
 FOLDER = tempfile.TemporaryDirectory()
 DB_PATH = Path(FOLDER.name) / 'catalogue-test.db'
-os.environ['DATABASE_URL'] = 'sqlite:///' + str(DB_PATH)
 
-from main import app, source_key
-from database import Base, get_db, engine
+from main import app
+from services.catalogue_review import source_key
+from database import Base, get_db
+
+# Never reuse the application engine: unittest discovery may have imported it
+# before this module, making DATABASE_URL changes ineffective and unsafe.
+engine = create_engine('sqlite:///' + str(DB_PATH), connect_args={'check_same_thread': False})
 from catalogue import course_public
 from portal_models import Account, Candidate, Course, FieldEvidence, Job, fill_course
 from security import password_hash
 from shared.contracts import Training
-from schedule import daily_request_key, enqueue_daily, load_topics
+from services.schedule_service import daily_request_key, enqueue_daily, load_topics
 
 
 QUOTE = (
-    'Primary Care Update by Academy of Family Physicians in Malaysia Kuala Lumpur. '
+    'Primary Care Update 2026 by Academy of Family Physicians in Malaysia Kuala Lumpur. '
     '2026-06-01 in person. CPD points 2. Source backed excerpt.'
 )
 
@@ -54,6 +58,15 @@ def sample(**overrides):
         'source_text': QUOTE,
         'evidence': {key: QUOTE for key in ['title', 'provider', 'mode', 'country', 'start_date', 'city', 'points', 'credit_label']},
     }
+    if 'source_text' not in overrides and 'evidence' not in overrides:
+        quote = QUOTE
+        for field in ('title', 'provider'):
+            if field in overrides:
+                quote = quote.replace(str(row[field]), str(overrides[field]))
+        if 'points' in overrides:
+            quote = quote.replace('CPD points 2.', 'CPD points ' + str(overrides['points']) + '.')
+        row['source_text'] = quote
+        row['evidence'] = {key: quote for key in row['evidence']}
     row.update(overrides)
     return Training(**row).model_dump(mode='json')
 
@@ -85,7 +98,7 @@ class CatalogueApiTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {'TYPESAFE_API_KEY': ''}, clear=False)
         self.env.start()
         self.scraper_ready = patch(
-            'main._scraper_service_status',
+            'services.discovery_status_service._scraper_service_status',
             return_value={'status': 'ready', 'reachable': True, 'tavily_configured': True, 'model_ready': True},
         )
         self.scraper_ready.start()
@@ -94,6 +107,8 @@ class CatalogueApiTests(unittest.TestCase):
         mocked.return_value.is_file.return_value = False
 
     def tearDown(self):
+        self.client.close()
+        engine.dispose()
         self.keyfile.stop()
         self.scraper_ready.stop()
         self.env.stop()
@@ -465,7 +480,7 @@ class CatalogueApiTests(unittest.TestCase):
         self.assertEqual(save.json()['status'], 'held')
 
     def test_load_topics_clamps_and_skips_invalid_max_results(self):
-        import schedule as schedule_mod
+        from services import schedule_service as schedule_mod
 
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'topics.json'
@@ -523,20 +538,20 @@ class CatalogueApiTests(unittest.TestCase):
             self.assertEqual(result['enqueued'], 0)
             self.assertIn('not valid JSON', result['error'])
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': 'CareCredits-demo-2026'})
-        with patch('main.load_topics', side_effect=ValueError('scrape_topics.json is not valid JSON')):
+        with patch('services.ingestion_job_service.load_topics', side_effect=ValueError('scrape_topics.json is not valid JSON')):
             listed = self.client.get('/api/v1/admin/scrape-topics')
         self.assertEqual(listed.status_code, 503, listed.text)
         self.assertEqual(listed.json()['error']['code'], 'unavailable')
 
     def test_daily_scrape_enqueue(self):
-        from schedule import local_today
+        from services.schedule_service import local_today
         topics = load_topics()
         self.assertTrue(topics)
         self.assertGreaterEqual(len(topics), 11)
         self.assertTrue(any('site:' in item['query'] for item in topics))
         self.assertTrue(any(item['max_results'] != 5 for item in topics), 'at least one topic should exercise non-default max_results')
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value='2099-01-15'
+            'services.schedule_service.local_today', return_value='2099-01-15'
         ):
             first = enqueue_daily(self.Session())
         self.assertEqual(first['day'], '2099-01-15')
@@ -553,7 +568,7 @@ class CatalogueApiTests(unittest.TestCase):
                 job.status = 'succeeded'
             db.commit()
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value='2099-01-15'
+            'services.schedule_service.local_today', return_value='2099-01-15'
         ):
             second = enqueue_daily(self.Session())
             self.assertEqual(second['enqueued'], 0)
@@ -566,7 +581,7 @@ class CatalogueApiTests(unittest.TestCase):
                 job.status = 'interrupted'
             db.commit()
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value='2099-01-15'
+            'services.schedule_service.local_today', return_value='2099-01-15'
         ):
             forced_local = enqueue_daily(self.Session(), force=True)
         self.assertGreaterEqual(forced_local['enqueued'], 1)
@@ -578,7 +593,7 @@ class CatalogueApiTests(unittest.TestCase):
             ]
             self.assertGreaterEqual(len(still_succeeded), 1)
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value='2099-01-16'
+            'services.schedule_service.local_today', return_value='2099-01-16'
         ):
             next_day = enqueue_daily(self.Session())
         self.assertEqual(next_day['day'], '2099-01-16')
@@ -634,19 +649,20 @@ class CatalogueApiTests(unittest.TestCase):
 
         with self.Session() as db:
             with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-                'schedule.local_today', return_value=day
-            ), patch('schedule.load_topics', return_value=topics), patch.object(db, 'begin_nested', return_value=BoomNested()):
+                'services.schedule_service.local_today', return_value=day
+            ), patch('services.schedule_service.load_topics', return_value=topics), patch.object(db, 'begin_nested', return_value=BoomNested()):
                 result = enqueue_daily(db, force=False)
         self.assertEqual(result['enqueued'], 0, result)
         self.assertEqual(result['skipped'], 1, result)
         with self.Session() as db:
             self.assertEqual(db.query(Job).filter_by(query=topics[0]['query']).count(), 0)
-        schedule_src = Path(__file__).resolve().parents[1].joinpath('schedule.py').read_text(encoding='utf-8')
-        self.assertIn('begin_nested', schedule_src)
-        self.assertIn('IntegrityError', schedule_src)
-        self.assertIn('with_for_update', schedule_src)
+        schedule_src = Path(__file__).resolve().parents[1].joinpath('services/schedule_service.py').read_text(encoding='utf-8')
+        repository_src = Path(__file__).resolve().parents[1].joinpath('repository/schedule_repository.py').read_text(encoding='utf-8')
+        self.assertIn('begin_nested', repository_src)
+        self.assertIn('IntegrityError', repository_src)
+        self.assertIn('with_for_update', repository_src)
         self.assertIn('daily_jobs_used', schedule_src)
-        self.assertIn("like(f'daily:{day}:%')", schedule_src)
+        self.assertIn("like(f'daily:{day}:%')", repository_src)
         self.assertIn('daily_request_key', schedule_src)
         self.assertNotIn('topics[:20]', schedule_src)
 
@@ -656,13 +672,13 @@ class CatalogueApiTests(unittest.TestCase):
         first = [{'query': 'Swap topic A GP CPD', 'max_results': 2}, {'query': 'Swap topic B GP CPD', 'max_results': 2}]
         second = [{'query': 'Swap topic C GP CPD', 'max_results': 2}, {'query': 'Swap topic D GP CPD', 'max_results': 2}]
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '2'}, clear=False), patch(
-            'schedule.local_today', return_value=day
-        ), patch('schedule.load_topics', return_value=first):
+            'services.schedule_service.local_today', return_value=day
+        ), patch('services.schedule_service.load_topics', return_value=first):
             first_run = enqueue_daily(self.Session())
         self.assertEqual(first_run['enqueued'], 2, first_run)
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '2'}, clear=False), patch(
-            'schedule.local_today', return_value=day
-        ), patch('schedule.load_topics', return_value=second):
+            'services.schedule_service.local_today', return_value=day
+        ), patch('services.schedule_service.load_topics', return_value=second):
             second_run = enqueue_daily(self.Session())
         self.assertEqual(second_run['enqueued'], 0, second_run)
         self.assertEqual(second_run['skipped'], 2, second_run)
@@ -681,8 +697,8 @@ class CatalogueApiTests(unittest.TestCase):
             {'query': 'x', 'max_results': 2},
         ]
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value=day
-        ), patch('schedule.load_topics', return_value=topics):
+            'services.schedule_service.local_today', return_value=day
+        ), patch('services.schedule_service.load_topics', return_value=topics):
             result = enqueue_daily(self.Session())
         self.assertEqual(result['enqueued'], 1, result)
         self.assertEqual(result['skipped'], 4, result)
@@ -725,8 +741,8 @@ class CatalogueApiTests(unittest.TestCase):
                 if job.query in {topic['query'] for topic in topics}
             }
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value=day
-        ), patch('schedule.load_topics', return_value=topics):
+            'services.schedule_service.local_today', return_value=day
+        ), patch('services.schedule_service.load_topics', return_value=topics):
             forced = enqueue_daily(self.Session(), force=True)
         self.assertEqual(forced['enqueued'], 2, forced)
         self.assertEqual(forced['skipped'], 1, forced)
@@ -765,8 +781,8 @@ class CatalogueApiTests(unittest.TestCase):
             )
             db.commit()
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value=day
-        ), patch('schedule.load_topics', return_value=[topic]):
+            'services.schedule_service.local_today', return_value=day
+        ), patch('services.schedule_service.load_topics', return_value=[topic]):
             forced = enqueue_daily(self.Session(), force=True)
         self.assertEqual(forced['enqueued'], 1, forced)
         self.assertEqual(forced['skipped'], 0, forced)
@@ -800,8 +816,8 @@ class CatalogueApiTests(unittest.TestCase):
             )
             db.commit()
         with patch.dict(os.environ, {'DAILY_SCRAPE_JOB_CEILING': '10'}, clear=False), patch(
-            'schedule.local_today', return_value=day
-        ), patch('schedule.load_topics', return_value=[topic]):
+            'services.schedule_service.local_today', return_value=day
+        ), patch('services.schedule_service.load_topics', return_value=[topic]):
             forced = enqueue_daily(self.Session(), force=True)
         self.assertEqual(forced['enqueued'], 1, forced)
         with self.Session() as db:
@@ -820,17 +836,17 @@ class CatalogueApiTests(unittest.TestCase):
             self.assertEqual(snippet, 'fresh spend evidence')
 
     def test_auto_daily_scrape_stays_off_until_tavily_and_model_ready(self):
-        from main import _paid_scrape_ready
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False}):
+        from services.discovery_status_service import _paid_scrape_ready
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False}):
             self.assertFalse(_paid_scrape_ready())
-        with patch('main._scraper_service_status', return_value={'tavily_configured': False, 'model_ready': True}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': False, 'model_ready': True}):
             self.assertFalse(_paid_scrape_ready())
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
             self.assertTrue(_paid_scrape_ready())
 
     def test_operator_api_blocks_tavily_spend_without_model(self):
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': 'CareCredits-demo-2026'})
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False}):
             blocked = self.client.post(
                 '/api/v1/admin/ingestion-jobs',
                 json={'query': 'GP CPD Kuala Lumpur'},
@@ -845,7 +861,7 @@ class CatalogueApiTests(unittest.TestCase):
             self.assertEqual(daily.status_code, 409, daily.text)
             retry = self.client.post('/api/v1/admin/ingestion-jobs/missing-job/retry')
             self.assertEqual(retry.status_code, 409, retry.text)
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
             allowed = self.client.post(
                 '/api/v1/admin/ingestion-jobs',
                 json={'query': 'GP CPD Kuala Lumpur'},
@@ -855,7 +871,7 @@ class CatalogueApiTests(unittest.TestCase):
 
     def test_claim_blocks_tavily_spend_without_model(self):
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': 'CareCredits-demo-2026'})
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
             queued = self.client.post(
                 '/api/v1/admin/ingestion-jobs',
                 json={'query': 'GP CPD Kuala Lumpur'},
@@ -863,11 +879,11 @@ class CatalogueApiTests(unittest.TestCase):
             )
         self.assertEqual(queued.status_code, 202, queued.text)
         job_id = queued.json()['id']
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False}):
             blocked = self.client.post('/internal/v1/jobs/claim', headers=self.service)
         self.assertEqual(blocked.status_code, 204, blocked.text)
         self.assertEqual(blocked.headers.get('x-care-claim-reason'), 'not_ready')
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': True}):
             claimed = self.client.post('/internal/v1/jobs/claim', headers=self.service)
         self.assertEqual(claimed.status_code, 200, claimed.text)
         self.assertEqual(claimed.json()['id'], job_id)
@@ -875,7 +891,7 @@ class CatalogueApiTests(unittest.TestCase):
     def test_operator_api_blocks_when_scraper_health_unreachable(self):
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': 'CareCredits-demo-2026'})
         unreachable = {'status': 'unreachable', 'reachable': False, 'tavily_configured': False, 'model_ready': False}
-        with patch('main._scraper_service_status', return_value=unreachable):
+        with patch('services.discovery_status_service._scraper_service_status', return_value=unreachable):
             blocked = self.client.post(
                 '/api/v1/admin/ingestion-jobs',
                 json={'query': 'GP CPD Kuala Lumpur'},
@@ -902,7 +918,8 @@ class CatalogueApiTests(unittest.TestCase):
         changed['description'] = 'Updated brochure copy with a new fee note.'
         changed['fee'] = 150
         changed['currency'] = 'MYR'
-        changed['evidence'] = {**changed['evidence'], 'fee': QUOTE, 'currency': QUOTE, 'description': QUOTE}
+        changed['source_text'] += ' Fee MYR 150.'
+        changed['evidence'] = {**changed['evidence'], 'fee': 'Fee MYR 150.', 'currency': 'MYR', 'description': QUOTE}
         again = self.client.post(
             '/internal/v1/catalogue/save',
             json={
@@ -946,8 +963,6 @@ class CatalogueApiTests(unittest.TestCase):
             )
         course_id = first.json()['course_id']
         renamed = sample(title='Primary Care Update KL 2026')
-        renamed['evidence'] = {**renamed['evidence'], 'title': QUOTE}
-        renamed['source_text'] = QUOTE
         again = self.client.post(
             '/internal/v1/catalogue/save',
             json={
@@ -996,7 +1011,8 @@ class CatalogueApiTests(unittest.TestCase):
         changed = sample(title='Refresh Upsert Workshop', source_url='https://example.org/refresh-upsert')
         changed['fee'] = 90
         changed['currency'] = 'MYR'
-        changed['evidence'] = {**changed['evidence'], 'fee': QUOTE, 'currency': QUOTE}
+        changed['source_text'] += ' Fee MYR 90.'
+        changed['evidence'] = {**changed['evidence'], 'fee': 'Fee MYR 90.', 'currency': 'MYR'}
         again = self.client.post(
             '/internal/v1/catalogue/save',
             json={
@@ -1008,6 +1024,8 @@ class CatalogueApiTests(unittest.TestCase):
         self.assertEqual(again.status_code, 200, again.text)
         first_id = again.json()['candidate_id']
         changed['fee'] = 120
+        changed['source_text'] = changed['source_text'].replace('Fee MYR 90.', 'Fee MYR 120.')
+        changed['evidence']['fee'] = 'Fee MYR 120.'
         twice = self.client.post(
             '/internal/v1/catalogue/save',
             json={

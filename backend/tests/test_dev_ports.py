@@ -123,7 +123,7 @@ class DevPortTests(unittest.TestCase):
         self.assertEqual(scraper_filled['MODEL_ID'], 'nvidia/nemotron-3-super-120b-a12b')
         self.assertIn('http://localhost:3010', backend_empty['ALLOWED_ORIGINS'])
         self.assertIn('http://localhost:3030', backend_empty['ALLOWED_ORIGINS'])
-        from main import DEFAULT_ALLOWED_ORIGINS
+        from http_boundary import DEFAULT_ALLOWED_ORIGINS
 
         self.assertEqual(LOCAL_DEV_ALLOWED_ORIGINS, DEFAULT_ALLOWED_ORIGINS)
         self.assertIn('http://127.0.0.1:3040', allowed_origins_for_frontend(3040))

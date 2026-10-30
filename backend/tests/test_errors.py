@@ -26,6 +26,9 @@ class ErrorEnvelopeTests(unittest.TestCase):
         self.engine = create_engine(os.environ['DATABASE_URL'])
         Base.metadata.create_all(self.engine)
         Session = sessionmaker(bind=self.engine)
+        from database.migrations import migrate_schema
+        with Session() as db:
+            migrate_schema(db)
 
         def dependency():
             with Session() as db:
@@ -36,6 +39,8 @@ class ErrorEnvelopeTests(unittest.TestCase):
 
     def tearDown(self):
         app.dependency_overrides.clear()
+        self.client.close()
+        self.engine.dispose()
 
     def test_unauthenticated_uses_envelope(self):
         result = self.client.get('/api/v1/me')
@@ -82,7 +87,7 @@ class ErrorEnvelopeTests(unittest.TestCase):
         def boom(*_args, **_kwargs):
             raise RuntimeError('secret stack should not leak')
 
-        with patch('main.preference_json', side_effect=boom):
+        with patch('services.preference_service.preference_json', side_effect=boom):
             self.client.post('/api/v1/auth/register', json={'email': 'err@example.com', 'password': 'CareCredits-demo-2026', 'name': 'Err'})
             self.client.post('/api/v1/auth/login', json={'email': 'err@example.com', 'password': 'CareCredits-demo-2026'})
             result = self.client.get('/api/v1/me/digest')

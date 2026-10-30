@@ -5,6 +5,8 @@ from typing import Literal
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from zoneinfo import ZoneInfo
 import ipaddress
+from decimal import Decimal, InvalidOperation
+import unicodedata
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
@@ -219,6 +221,25 @@ class Training(BaseModel):
         return self
 
 
+def _fact_words(value):
+    """Compare literal facts without making punctuation/case a source of false negatives."""
+    value = unicodedata.normalize('NFKC', str(value or '')).casefold()
+    return ' '.join(re.findall(r'\w+', value, flags=re.UNICODE))
+
+
+def _quote_contains_number(quote, value):
+    # Do not accept `4` from `40` or from an unrelated year. Grouped thousands and
+    # decimal representations are equivalent, but a quotation still needs the value.
+    target = Decimal(str(value))
+    for match in re.finditer(r'(?<![\d.,+-])[+-]?\d+(?:,\d{3})*(?:\.\d+)?(?!\d|\.\d|,\d)', quote):
+        try:
+            if Decimal(match.group().replace(',', '')) == target:
+                return True
+        except InvalidOperation:
+            continue
+    return False
+
+
 def validate_evidence(training):
     required = ['title', 'provider', 'country', 'mode']
     required += [key for key in ('start_date', 'end_date', 'timezone', 'venue', 'city', 'state', 'fee', 'currency', 'points', 'credit_label', 'difficulty', 'prerequisites', 'registration_url') if getattr(training, key) is not None]
@@ -229,12 +250,18 @@ def validate_evidence(training):
         quote = training.evidence.get(field, '')
         if not quote.strip():
             raise ValueError('Missing source evidence for ' + field)
-        if quote in training.source_text:
-            continue
         normalized_quote = ' '.join(quote.split())
-        if normalized_quote and normalized_quote in normalized_text:
-            continue
-        raise ValueError('Missing source evidence for ' + field)
+        if quote not in training.source_text and not (normalized_quote and normalized_quote in normalized_text):
+            raise ValueError('Missing source evidence for ' + field)
+        # An existing quotation alone is not evidence for an arbitrary claimed
+        # value. Enforce deterministic identity/numeric checks before human review.
+        value = getattr(training, field)
+        if field in ('title', 'provider'):
+            fact = _fact_words(value)
+            if not fact or (' ' + fact + ' ') not in (' ' + _fact_words(quote) + ' '):
+                raise ValueError('Source quotation does not support ' + field)
+        if field in ('fee', 'points') and not (_quote_contains_number(quote, value) or (field == 'fee' and value == 0 and re.search(r'\b(free|complimentary|no charge)\b', quote, re.I))):
+            raise ValueError('Source quotation does not support ' + field)
     # Coordinates are not model-inferred; geocoding is not part of this extraction contract.
     if training.latitude is not None or training.longitude is not None:
         raise ValueError('Extracted coordinates require a separate verified geocoding step')

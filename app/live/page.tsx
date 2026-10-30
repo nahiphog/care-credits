@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   BookOpen,
   CalendarDays,
@@ -17,9 +17,11 @@ import {
   X,
 } from 'lucide-react';
 import { TrainingDetail } from '@/components/TrainingDetail';
+import { PasswordSettings } from '@/components/PasswordSettings';
 import { LiveIngestion } from '@/components/LiveIngestion';
+import { CertificatePanel } from '@/components/CertificatePanel';
 import { DateChip } from '@/components/CourseList';
-import { api, AuditItem, calendarYearLocal, Course, distanceLabel, emptyRecord, formatDate, locationLabel, normalizeRecordEdit, Progress, RecordData, RecordHistoryItem, User } from '@/lib/portal';
+import { api, ApiError, activityLabel, AuditItem, calendarYearLocal, Course, distanceLabel, emptyRecord, formatDate, locationLabel, normalizeRecordEdit, Progress, RecordData, RecordHistoryItem, User } from '@/lib/portal';
 
 const PAGE_SIZE = 12;
 
@@ -41,6 +43,7 @@ const nav = [
   [CalendarDays, 'Events'],
   [FileText, 'Certificates'],
   [ShieldCheck, 'About credits'],
+  [Settings, 'Settings'],
 ] as const;
 
 function Mark() {
@@ -63,6 +66,17 @@ function initials(name: string) {
 
 export default function LiveSearch() {
   const [user, setUser] = useState<User | null>(null);
+  const [profileDraft, setProfileDraft] = useState<User | null>(null);
+  const [profileNotice, setProfileNotice] = useState('');
+  const [bootstrapError, setBootstrapError] = useState('');
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [mobile, setMobile] = useState(false);
+  const [geoError, setGeoError] = useState('');
+  const [locating, setLocating] = useState(false);
+  const geoRequest = useRef(0);
+  const [digestAvailable, setDigestAvailable] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [booting, setBooting] = useState(true);
   const [signup, setSignup] = useState(false);
@@ -118,7 +132,6 @@ export default function LiveSearch() {
   const [suggestionsCity, setSuggestionsCity] = useState<string | null>(null);
   const [suggestionsBusy, setSuggestionsBusy] = useState(true);
   const [suggestionsFailed, setSuggestionsFailed] = useState(false);
-  const [certBusy, setCertBusy] = useState(false);
   const [digestBusy, setDigestBusy] = useState(false);
   const [digestFailed, setDigestFailed] = useState(false);
   const [digestPreferenceBusy, setDigestPreferenceBusy] = useState(true);
@@ -145,7 +158,7 @@ export default function LiveSearch() {
   // When set, page/modal Retry runs this action (cancel). Otherwise Retry reloads the workspace.
   const retryRef = useRef<(() => void) | null>(null);
   const userRef = useRef(user);
-  userRef.current = user;
+  useEffect(() => { userRef.current = user; }, [user]);
 
   function beginSaving() {
     const gen = ++savingGen.current;
@@ -167,7 +180,7 @@ export default function LiveSearch() {
     retryRef.current = retry || null;
   }
   // FIND-01: pager uses last successful Search filters; Retry re-issues a failed attempt via pendingSearch.
-  const appliedSearch = useRef({
+  const [applied, setApplied] = useState({
     query: '',
     city: '',
     state: '',
@@ -182,6 +195,7 @@ export default function LiveSearch() {
     radius: '25',
     nearby: null as { latitude: number; longitude: number } | null,
   });
+  const appliedSearch = useRef(applied);
   // Last in-flight / failed Search (including page turns). Cleared on success so Retry matches the failed request
   // while the pager keeps paging the last successful list when a Search refresh fails.
   const pendingSearch = useRef<{
@@ -206,11 +220,58 @@ export default function LiveSearch() {
     page: number;
   } | null>(null);
   const [resultsNearby, setResultsNearby] = useState(false);
+  useEffect(() => {
+    const match = window.matchMedia('(max-width: 830px)');
+    const update = () => setMobile(match.matches);
+    update(); match.addEventListener('change', update);
+    return () => match.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (!open || !mobile) return;
+    const before = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sidebarRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setOpen(false); menuRef.current?.focus(); }
+      if (event.key !== 'Tab') return;
+      const nodes = Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('button,a[href]') || []);
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', key);
+    return () => { document.body.style.overflow = before; document.removeEventListener('keydown', key); };
+  }, [open, mobile]);
+  useEffect(() => {
+    const expired = (event: Event) => {
+      if (!userRef.current) return;
+      userRef.current = null;
+      ++workspaceRequest.current; ++catalogueRequest.current; ++learningRequest.current; ++progressRequest.current; ++detailRequest.current; ++savingGen.current;
+      setUser(null); setMode('signin'); setSelected(null); setCourses([]); setRecords([]); setProgress(null); setSuggestions([]); setAudits([]); setOpen(false); setFiltersOpen(false);
+      setError((event as CustomEvent<string>).detail || 'Your session has expired. Please sign in again.');
+    };
+    window.addEventListener('carecredits:session-expired', expired);
+    return () => window.removeEventListener('carecredits:session-expired', expired);
+  }, []);
+  useEffect(() => {
+    if (!user?.id) return;
+    document.getElementById('page-heading')?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [tab, user?.id]);
+  function cancelFilters() {
+    ++geoRequest.current; setLocating(false);
+    const saved = appliedSearch.current;
+    setCity(saved.city); setState(saved.state); setDeliveryMode(saved.mode); setPeriod(saved.period);
+    setDifficulty(saved.difficulty); setMaxFee(saved.maxFee); setMinPoints(saved.minPoints);
+    setDateFrom(saved.dateFrom); setDateTo(saved.dateTo); setIncludeUnknown(saved.includeUnknown);
+    setRadius(saved.radius); setNearby(saved.nearby); setGeoError(''); setFiltersOpen(false);
+  }
+
 
   useEffect(() => {
     Promise.all([
       api('/config').then((c) => {
-        setSignup(c.signup_enabled);
+        setSignup(c.signup_enabled); setDigestAvailable(!!c.digest_available);
         setOauth(!!c.oauth_google);
         setDemo(!!c.demo);
         // Mirror LoginForm: only offer register when signup is enabled.
@@ -221,16 +282,17 @@ export default function LiveSearch() {
         }
       }),
       api('/me')
-        .then(setUser)
-        .catch(() => {}),
-    ]).finally(() => setBooting(false));
-  }, []);
+        .then((account) => { setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account); })
+        .catch((error) => { if (!(error instanceof ApiError && error.status === 401)) throw error; }),
+    ]).catch((error) => setBootstrapError(error.message || 'CareCredits could not be reached.')).finally(() => setBooting(false));
+  }, [bootstrapAttempt]);
 
   // AUTH-01: Google callback redirects here with oauth=denied|failed; surface the outcome.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const oauthStatus = params.get('oauth');
+    const timer = window.setTimeout(() => {
     if (oauthStatus === 'denied') {
       setError('Google sign-in was cancelled or denied. Try again or use email.');
     } else if (oauthStatus === 'failed') {
@@ -242,6 +304,8 @@ export default function LiveSearch() {
       const path = window.location.pathname + (next ? '?' + next : '') + window.location.hash;
       window.history.replaceState({}, '', path);
     }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function search(overrides: {
@@ -326,6 +390,7 @@ export default function LiveSearch() {
       setTotal(data.total);
       setPage(nextPage);
       appliedSearch.current = requestFilters;
+      setApplied(requestFilters);
       pendingSearch.current = null;
       setResultsNearby(!!nextNearby);
       setSearchFailed(false);
@@ -539,21 +604,20 @@ export default function LiveSearch() {
     }
   }
 
-  const applied = appliedSearch.current;
-  const filterChips: { key: string; label: string; remove: () => void }[] = [];
-  const addChip = (key: string, label: string, remove: () => void) => filterChips.push({ key, label, remove });
-  if (applied.query) addChip('query', `Search: ${applied.query}`, () => { searchCommitted({ query: '' }); });
-  if (applied.city) addChip('city', applied.city, () => { searchCommitted({ city: '' }); });
-  if (applied.state) addChip('state', applied.state, () => { searchCommitted({ state: '' }); });
-  if (applied.mode) addChip('mode', applied.mode.replace('_', ' '), () => { searchCommitted({ mode: '' }); });
-  if (applied.period !== 'all') addChip('period', applied.period, () => { searchCommitted({ period: 'all' }); });
-  if (applied.difficulty) addChip('difficulty', applied.difficulty, () => { searchCommitted({ difficulty: '' }); });
-  if (applied.maxFee) addChip('fee', `Up to MYR ${applied.maxFee}`, () => { searchCommitted({ maxFee: '' }); });
-  if (applied.minPoints) addChip('points', `${applied.minPoints}+ points`, () => { searchCommitted({ minPoints: '' }); });
-  if (applied.dateFrom) addChip('from', `From ${applied.dateFrom}`, () => { searchCommitted({ dateFrom: '' }); });
-  if (applied.dateTo) addChip('to', `Until ${applied.dateTo}`, () => { searchCommitted({ dateTo: '' }); });
-  if (applied.includeUnknown) addChip('unknown', 'Include unconfirmed details', () => { searchCommitted({ includeUnknown: false }); });
-  if (applied.nearby) addChip('nearby', `Within ${applied.radius} km`, () => { searchCommitted({ nearby: null }); });
+  const filterChips: { key: string; label: string; overrides: Parameters<typeof searchCommitted>[0] }[] = [];
+  const addChip = (key: string, label: string, overrides: Parameters<typeof searchCommitted>[0]) => filterChips.push({ key, label, overrides });
+  if (applied.query) addChip('query', `Search: ${applied.query}`, { query: '' });
+  if (applied.city) addChip('city', applied.city, { city: '' });
+  if (applied.state) addChip('state', applied.state, { state: '' });
+  if (applied.mode) addChip('mode', applied.mode.replace('_', ' '), { mode: '' });
+  if (applied.period !== 'all') addChip('period', applied.period, { period: 'all' });
+  if (applied.difficulty) addChip('difficulty', applied.difficulty, { difficulty: '' });
+  if (applied.maxFee) addChip('fee', `Up to MYR ${applied.maxFee}`, { maxFee: '' });
+  if (applied.minPoints) addChip('points', `${applied.minPoints}+ points`, { minPoints: '' });
+  if (applied.dateFrom) addChip('from', `From ${applied.dateFrom}`, { dateFrom: '' });
+  if (applied.dateTo) addChip('to', `Until ${applied.dateTo}`, { dateTo: '' });
+  if (applied.includeUnknown) addChip('unknown', 'Include unconfirmed details', { includeUnknown: false });
+  if (applied.nearby) addChip('nearby', `Within ${applied.radius} km`, { nearby: null });
   const activeFilterCount = filterChips.filter((chip) => chip.key !== 'query').length;
 
   function clearFilters() {
@@ -592,44 +656,47 @@ export default function LiveSearch() {
   }
 
   function locateNearby() {
+    const request = ++geoRequest.current;
     if (!navigator.geolocation) {
-      setError('Location is unavailable. Choose your city instead.');
+      setGeoError('Location is unavailable. Choose your city instead.');
       return;
     }
+    setLocating(true); setGeoError('');
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (geoRequest.current !== request) return;
         const next = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-        setNearby(next);
+        setNearby(next); setLocating(false);
         // Page commits inside search() only after a successful load.
         // Location is a draft filter until Apply filters is pressed.
       },
-      () => setError('Location was not available. You can still search by city or state.'),
+      () => { if (geoRequest.current !== request) return; setLocating(false); setGeoError('Location was not available. You can still search by city or state.'); },
       { timeout: 10000 },
     );
   }
 
   async function saveLocation(event: FormEvent) {
     event.preventDefault();
-    if (!user) return;
+    if (!user || !profileDraft) return;
+    const owner = user.id;
     setLocationBusy(true);
     setError('');
     try {
       const saved = await api('/me', {
         method: 'PATCH',
         body: JSON.stringify({
-          name: user.name,
-          city: user.city || '',
-          state: user.state || '',
-          bio: user.bio || '',
-          public_enabled: user.public_enabled,
+          name: profileDraft.name,
+          city: profileDraft.city || '',
+          state: profileDraft.state || '',
+          bio: profileDraft.bio || '',
+          public_enabled: profileDraft.public_enabled,
           latitude: user.latitude ?? null,
           longitude: user.longitude ?? null,
         }),
       });
-      setUser(saved);
-      setCity(saved.city || '');
-      setState(saved.state || '');
-      await loadWorkspace(saved.city || '', saved.state || '');
+      if (userRef.current?.id !== owner) return;
+      setUser(saved); setProfileDraft(saved);
+      setProfileNotice('Profile saved. Catalogue filters have not changed.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -637,8 +704,7 @@ export default function LiveSearch() {
     }
   }
 
-  useEffect(() => {
-    if (!user) return;
+  const loadSignedInWorkspace = useEffectEvent(() => {
     // Profile location must not silently restrict the catalogue on login/reload.
     const nextCity = appliedSearch.current.city;
     const nextState = appliedSearch.current.state;
@@ -647,7 +713,12 @@ export default function LiveSearch() {
     loadWorkspace(nextCity, nextState).catch((e) => {
       setError((e as Error).message || 'Workspace could not be loaded.');
     });
-  }, [user]);
+  });
+  useEffect(() => {
+    if (!user?.id) return;
+    const timer = window.setTimeout(() => loadSignedInWorkspace(), 0);
+    return () => window.clearTimeout(timer);
+  }, [user?.id]);
 
   async function toggleDigest(next: boolean) {
     setError('');
@@ -666,22 +737,6 @@ export default function LiveSearch() {
     }
   }
 
-  async function issueCertificate() {
-    setCertBusy(true);
-    setError('');
-    try {
-      const cert = await api('/me/certificates', {
-        method: 'POST',
-        body: JSON.stringify({ year }),
-      });
-      window.open('/api/v1/me/certificates/' + cert.id, '_blank', 'noopener');
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setCertBusy(false);
-    }
-  }
-
   async function submitAccount(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -692,7 +747,8 @@ export default function LiveSearch() {
         if (!signup) throw new Error('Registration is disabled on this server.');
         await api('/auth/register', { method: 'POST', body: JSON.stringify(body) });
       }
-      setUser(await api('/auth/login', { method: 'POST', body: JSON.stringify(body) }));
+      const account = await api('/auth/login', { method: 'POST', body: JSON.stringify(body) });
+      setUser(account); setProfileDraft((draft) => draft?.id === account.id ? draft : account);
       setLoading(true);
       setSuggestionsBusy(true);
       setLearningBusy(true);
@@ -797,6 +853,7 @@ export default function LiveSearch() {
     );
   }
 
+  if (bootstrapError) return <main className="dash gate"><section className="gate-card" role="alert"><h1>CareCredits is unavailable</h1><p>{bootstrapError}</p><button onClick={() => { setBooting(true); setBootstrapError(''); setBootstrapAttempt((value) => value + 1); }}>Try again</button></section></main>;
   if (!user) {
     return (
       <div className="dash">
@@ -854,6 +911,8 @@ export default function LiveSearch() {
               <ChevronRight />
             </button>
             {oauth && (
+              // OAuth must navigate the document to the backend; never prefetch this state-changing handshake.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a className="secondary" href="/api/v1/auth/oauth/google">
                 Continue with Google
               </a>
@@ -885,14 +944,14 @@ export default function LiveSearch() {
   return (
     <div className="dash">
       <div className="app-shell">
-        <aside className={open ? 'sidebar sidebar-open' : 'sidebar'}>
+        <aside ref={sidebarRef} id="dashboard-navigation" inert={mobile && !open} className={open ? 'sidebar sidebar-open' : 'sidebar'}>
           <div className="brand">
             <Mark />
             <div>
               <strong>Care Credits</strong>
               <small>Log points. Find training. Focus on patients.</small>
             </div>
-            <button className="close-nav" onClick={() => setOpen(false)}>
+            <button className="close-nav" aria-label="Close navigation" onClick={() => { setOpen(false); menuRef.current?.focus(); }}>
               <X />
             </button>
           </div>
@@ -901,6 +960,7 @@ export default function LiveSearch() {
               <button
                 key={item}
                 className={item === tab ? 'nav-item active' : 'nav-item'}
+                aria-current={item === tab ? 'page' : undefined}
                 onClick={() => {
                   setTab(item);
                   setOpen(false);
@@ -933,7 +993,10 @@ export default function LiveSearch() {
               className="text-link"
               aria-label="Sign out"
               onClick={async () => {
-                await api('/auth/logout', { method: 'POST' });
+                try { await api('/auth/logout', { method: 'POST' }); } catch (error) { setError((error as Error).message); return; }
+                userRef.current = null;
+                ++catalogueRequest.current; ++learningRequest.current; ++progressRequest.current; ++detailRequest.current; ++savingGen.current;
+                setProfileDraft(null);
                 setUser(null);
                 // Reset nav so the next account cannot inherit My Credits / Certificates / Events.
                 setTab('Discover');
@@ -970,6 +1033,7 @@ export default function LiveSearch() {
                   radius: '25',
                   nearby: null,
                 };
+                setApplied(appliedSearch.current);
                 setQuery('');
                 setCity('');
                 setState('');
@@ -1008,9 +1072,9 @@ export default function LiveSearch() {
           </div>
         </aside>
         {open && <button className="veil" onClick={() => setOpen(false)} aria-label="Close navigation" />}
-        <main className="main" id="main-content">
+        <main className="main" id="main-content" inert={mobile && open}>
           <header className="topbar">
-            <button className="menu-button" onClick={() => setOpen(true)} aria-label="Open navigation">
+            <button ref={menuRef} className="menu-button" aria-expanded={open} aria-controls="dashboard-navigation" onClick={() => setOpen(true)} aria-label="Open navigation">
               <Menu />
             </button>
             <form className="catalogue-search" role="search" aria-label="Search catalogue" onSubmit={(event) => {
@@ -1031,7 +1095,7 @@ export default function LiveSearch() {
               </span>
             </div>
           </header>
-          <div className="content">
+          <div className="content"><h1 id="page-heading" tabIndex={-1} className="page-heading">{tab}</h1>
             {demo && (
               <p className="demo-banner">
                 <span className="badge">DEMO</span> Example courses and review candidates are fictional. Live discovery
@@ -1097,7 +1161,7 @@ export default function LiveSearch() {
                       className="primary"
                       onClick={() => {
                         setTab('Discover');
-                        search({ page: 1 });
+                        searchCommitted({ page: 1 });
                       }}
                     >
                       Find catalogue events <ChevronRight />
@@ -1154,7 +1218,7 @@ export default function LiveSearch() {
                         <ul className="source-list">
                           {audits.slice(0, 8).map((item) => (
                             <li key={item.id}>
-                              {item.action} · {item.entity_id}
+                              {activityLabel(item.action)}
                               {item.at ? ` · ${new Date(item.at * 1000).toLocaleString('en-MY')}` : ''}
                             </li>
                           ))}
@@ -1176,7 +1240,7 @@ export default function LiveSearch() {
                 </section>
               </>
             )}
-            <div className="dashboard-grid">
+            <div className={'dashboard-grid ' + (!['Overview', 'Discover', 'Events'].includes(tab) ? 'single-feature' : '')}>
               {(tab === 'Discover' || tab === 'Events' || tab === 'Overview') && (
               <div className="left-column">
                 <section className="card">
@@ -1187,7 +1251,7 @@ export default function LiveSearch() {
                         {tab === 'Discover'
                           ? 'Search results'
                           : tab === 'Events'
-                            ? 'Upcoming training'
+                            ? (applied.period === 'upcoming' ? 'Upcoming training' : 'Training events')
                             : 'Listed training'}
                       </h2>
                     </div>
@@ -1204,7 +1268,7 @@ export default function LiveSearch() {
 
                   </div>
                   <div className="filter-chips" aria-label="Applied filters">
-                    {filterChips.map((chip) => <button key={chip.key} type="button" disabled={loading} onClick={chip.remove} aria-label={`Remove ${chip.label} filter`}>{chip.label}<X size={14} aria-hidden="true" /></button>)}
+                    {filterChips.map((chip) => <button key={chip.key} type="button" disabled={loading} onClick={() => searchCommitted(chip.overrides)} aria-label={`Remove ${chip.label} filter`}>{chip.label}<X size={14} aria-hidden="true" /></button>)}
                     {filterChips.length > 0 && <button type="button" className="clear-filters" disabled={loading} onClick={clearFilters}>Clear all</button>}
                   </div>
 
@@ -1216,7 +1280,7 @@ export default function LiveSearch() {
                     <>
                       {searchFailed ? (
                         <p className="empty-copy" data-testid="live-search-stale">
-                          Couldn't refresh training. Showing the last loaded list.{' '}
+                          Couldn&apos;t refresh training. Showing the last loaded list.{' '}
                           <button
                             className="text-link"
                             type="button"
@@ -1295,31 +1359,30 @@ export default function LiveSearch() {
               </div>
               )}
               <div className="right-column">
-                {user.role === 'operator' && (
+                {user.role === 'operator' && (tab === 'Overview' || tab === 'Discover') && (
                   <LiveIngestion
                     onPublished={async () => {
                       await loadWorkspace();
                     }}
                   />
                 )}
-                <section className="card" id="live-location">
+                {tab === 'Settings' && <section className="card" id="live-location">
                   <div className="card-heading">
                     <div>
                       <span className="heading-icon">⌖</span>
-                      <h2>Malaysia location</h2>
+                      <h2>Profile settings</h2>
                     </div>
                   </div>
                   <p className="empty-copy">
-                    Save city and state on your profile. Catalogue search uses those fields, or Near me with a radius when
-                    you share coordinates. Skipping location does not block the rest of the demo.
+                    Save your location, biography and public-sharing preference. These settings do not change catalogue filters.
                   </p>
                   <form onSubmit={saveLocation}>
                     <label>
                       City
                       <input
                         aria-label="Profile city"
-                        value={user.city || ''}
-                        onChange={(e) => setUser({ ...user, city: e.target.value })}
+                        value={profileDraft?.city || ''}
+                        onChange={(e) => setProfileDraft({ ...(profileDraft || user), city: e.target.value })}
                         placeholder="Kuala Lumpur"
                       />
                     </label>
@@ -1327,8 +1390,8 @@ export default function LiveSearch() {
                       State
                       <input
                         aria-label="Profile state"
-                        value={user.state || ''}
-                        onChange={(e) => setUser({ ...user, state: e.target.value })}
+                        value={profileDraft?.state || ''}
+                        onChange={(e) => setProfileDraft({ ...(profileDraft || user), state: e.target.value })}
                         placeholder="Optional, e.g. Selangor"
                       />
                     </label>
@@ -1336,16 +1399,16 @@ export default function LiveSearch() {
                       Public profile bio
                       <textarea
                         aria-label="Public profile bio"
-                        value={user.bio || ''}
-                        onChange={(e) => setUser({ ...user, bio: e.target.value })}
+                        value={profileDraft?.bio || ''}
+                        onChange={(e) => setProfileDraft({ ...(profileDraft || user), bio: e.target.value })}
                         rows={2}
                       />
                     </label>
                     <label className="empty-copy">
                       <input
                         type="checkbox"
-                        checked={!!user.public_enabled}
-                        onChange={(e) => setUser({ ...user, public_enabled: e.target.checked })}
+                        checked={!!profileDraft?.public_enabled}
+                        onChange={(e) => setProfileDraft({ ...(profileDraft || user), public_enabled: e.target.checked })}
                       />{' '}
                       Show selected attended learning on a public profile
                     </label>
@@ -1358,11 +1421,12 @@ export default function LiveSearch() {
                       </p>
                     ) : null}
                     <button className="secondary" disabled={locationBusy}>
-                      {locationBusy ? 'Saving…' : 'Save location and search'}
+                      {locationBusy ? 'Saving…' : 'Save profile'}
                     </button>
                   </form>
-                </section>
-                <section className="card" id="live-suggestions" data-testid="live-suggestions">
+                  {profileNotice && <p role="status">{profileNotice}</p>}
+                </section>}
+                {(tab === 'Overview' || tab === 'Discover' || tab === 'Events') && <section className="card" id="live-suggestions" data-testid="live-suggestions">
                   <div className="card-heading">
                     <div>
                       <span className="heading-icon">✦</span>
@@ -1416,8 +1480,8 @@ export default function LiveSearch() {
                           {suggestionsFailed
                             ? "Couldn't load suggestions. Check your connection, then try again. "
                             : suggestionsCity
-                              ? 'No upcoming catalogue suggestions match your city and recent learning mode yet. Browse Discover or check back after the next catalogue refresh.'
-                              : 'No upcoming catalogue suggestions yet. Save a city or browse Discover.'}
+                              ? 'No catalogue suggestions match your city and recent learning mode yet. Browse Discover for all training.'
+                              : 'No catalogue suggestions yet. Save a city in Settings or browse Discover.'}
                           {suggestionsFailed ? (
                             <button className="text-link" type="button" onClick={() => loadWorkspace()}>
                               Retry
@@ -1427,8 +1491,8 @@ export default function LiveSearch() {
                       )}
                     </>
                   )}
-                </section>
-                <section className="card">
+                </section>}
+                {(tab === 'Overview') && <section className="card">
                   <div className="card-heading">
                     <div>
                       <span className="heading-icon">♧</span>
@@ -1496,7 +1560,8 @@ export default function LiveSearch() {
                   <a className="text-link" href="/workspace">
                     Open full workspace <ChevronRight />
                   </a>
-                </section>
+                </section>}
+                {tab === 'Settings' && <PasswordSettings />}
                 {tab === 'About credits' && (
                   <section className="card">
                     <div className="card-heading">
@@ -1511,22 +1576,7 @@ export default function LiveSearch() {
                     </p>
                   </section>
                 )}
-                {tab === 'Certificates' && (
-                  <section className="card">
-                    <div className="card-heading">
-                      <div>
-                        <span className="heading-icon">▤</span>
-                        <h2>Affiliation certificate</h2>
-                      </div>
-                    </div>
-                    <p className="empty-copy">
-                      Print a CareCredits affiliation record for {year}. It is not an MMC, MOH, or APC certificate.
-                    </p>
-                    <button className="primary" disabled={certBusy} onClick={issueCertificate}>
-                      {certBusy ? 'Preparing…' : 'Issue printable certificate'}
-                    </button>
-                  </section>
-                )}
+                {tab === 'Certificates' && <CertificatePanel year={year} />}
                 {tab === 'My Credits' && (
                   <section className="card" id="live-learning" data-testid="live-learning">
                     <div className="card-heading">
@@ -1656,11 +1706,11 @@ export default function LiveSearch() {
                       </div>
                     </div>
                     <p className="empty-copy">
-                      Opt in for a 14-day email with upcoming catalogue events, known prices, and your recorded CPD total.
+                      {digestAvailable ? 'Opt in for a 14-day email with catalogue events and your recorded CPD total.' : 'Automatic digest emails are unavailable on this deployment. Browse Discover for current training.'}
                     </p>
-                    {digestFailed ? (
+                    {!digestAvailable ? null : digestFailed ? (
                       <p className="empty-copy" data-testid="live-digest-failed">
-                        Couldn't load digest preference. Check your connection, then try again.{' '}
+                        Couldn&apos;t load digest preference. Check your connection, then try again.{' '}
                         <button className="text-link" type="button" onClick={() => loadWorkspace()}>
                           Retry
                         </button>
@@ -1687,8 +1737,8 @@ export default function LiveSearch() {
           </div>
         </main>
       </div>
-      {filtersOpen && <dialog ref={filterDialogRef} id="catalogue-filter-dialog" className="filter-dialog" aria-labelledby="filter-dialog-title" onCancel={() => setFiltersOpen(false)} onClose={() => setFiltersOpen(false)}>
-        <div className="filter-dialog-heading"><h2 id="filter-dialog-title">Filter training</h2><button type="button" className="filter-toggle" aria-label="Close filters" onClick={() => setFiltersOpen(false)}><X size={20} /></button></div>
+      {filtersOpen && <dialog ref={filterDialogRef} id="catalogue-filter-dialog" className="filter-dialog" aria-labelledby="filter-dialog-title" onCancel={cancelFilters}>
+        <div className="filter-dialog-heading"><h2 id="filter-dialog-title">Filter training</h2><button type="button" className="filter-toggle" aria-label="Close filters" onClick={cancelFilters}><X size={20} /></button></div>
                   <form id="catalogue-filter-panel" className="catalogue-filter-panel" onSubmit={(event) => { event.preventDefault(); setTab('Discover'); search({ page: 1 }); setFiltersOpen(false); }}>
                     <p className="filter-help">Adjust your filters, then apply them to update the results.</p>
                     <fieldset><legend>Location</legend><div className="filter-fields">
@@ -1709,7 +1759,7 @@ export default function LiveSearch() {
                       <label>Maximum fee (MYR)<input type="number" min="0" step="1" value={maxFee} onChange={(e) => setMaxFee(e.target.value)} placeholder="No maximum" /></label>
                       <label>Minimum advertised points<input type="number" min="0" step="0.1" value={minPoints} onChange={(e) => setMinPoints(e.target.value)} placeholder="No minimum" /></label>
                     </div><label className="filter-check"><input type="checkbox" checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.target.checked)} />Include courses with unconfirmed dates, fees or points</label></fieldset>
-                    <div className="filter-actions"><button className="search-btn" disabled={loading}>{loading ? 'Applying...' : 'Apply filters'}</button><button type="button" className="filter-toggle" onClick={() => setFiltersOpen(false)}>Cancel</button></div>
+                    <div aria-live="polite">{locating && <p>Finding your location…</p>}{geoError && <p role="alert">{geoError}</p>}</div><div className="filter-actions"><button className="search-btn" disabled={loading}>{loading ? 'Applying...' : 'Apply filters'}</button><button type="button" className="filter-toggle" onClick={cancelFilters}>Cancel</button></div>
                   </form>
       </dialog>}
       {selected && (

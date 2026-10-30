@@ -13,7 +13,8 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from main import app, today
+from main import app
+from domain.config import today
 from database import Base, get_db
 from portal_models import Account, Course, fill_course
 from security import password_hash
@@ -67,6 +68,8 @@ class DigestCertificateTests(unittest.TestCase):
             'PUBLIC_API_BASE': 'http://api-direct.test',
         })
         self.env.start()
+        availability = patch('services.preference_service.digest_available', return_value=True)
+        availability.start(); self.addCleanup(availability.stop)
         self.client = TestClient(app, headers={'X-Care-Client': '1', 'Origin': 'http://127.0.0.1:3000'})
         with self.Session() as db:
             doc = Account(email='doc@example.com', name='Doctor Dig', password_hash=HASH, city='Kuala Lumpur')
@@ -179,7 +182,7 @@ class DigestCertificateTests(unittest.TestCase):
 
     def test_suggestions_strip_whitespace_city_and_ignore_junk_mode(self):
         from portal_models import Account, Record
-        from suggestions import suggestions_for
+        from services.suggestion_service import suggestions_for
 
         with self.Session() as db:
             account = db.get(Account, self.doc_id)
@@ -208,7 +211,7 @@ class DigestCertificateTests(unittest.TestCase):
     def test_suggestions_prefer_most_recent_mode_not_majority(self):
         """PROG-02 preferred_mode is the latest attended delivery mode, not the majority."""
         from portal_models import Account, Record
-        from suggestions import suggestions_for
+        from services.suggestion_service import suggestions_for
 
         with self.Session() as db:
             account = db.get(Account, self.doc_id)
@@ -250,7 +253,7 @@ class DigestCertificateTests(unittest.TestCase):
 
     def test_suggestions_match_padded_catalogue_city(self):
         from portal_models import Account
-        from suggestions import suggestions_for
+        from services.suggestion_service import suggestions_for
 
         with self.Session() as db:
             account = db.get(Account, self.doc_id)
@@ -266,7 +269,7 @@ class DigestCertificateTests(unittest.TestCase):
     def test_suggestions_city_case_insensitive(self):
         """Catalogue city casing from extraction must still match the profile city."""
         from portal_models import Account
-        from suggestions import suggestions_for
+        from services.suggestion_service import suggestions_for
 
         with self.Session() as db:
             account = db.get(Account, self.doc_id)
@@ -289,7 +292,7 @@ class DigestCertificateTests(unittest.TestCase):
     def test_suggestions_skip_before_limit_keeps_later_city(self):
         """Signed-up same-city rows must not empty the city bucket via post-LIMIT skip."""
         from portal_models import Account, Record
-        from suggestions import suggestions_for
+        from services.suggestion_service import suggestions_for
 
         with self.Session() as db:
             account = db.get(Account, self.doc_id)
@@ -337,7 +340,7 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertFalse(any(item['title'] == 'Johor other' for item in body['items'][:1]))
 
     def test_digest_price_label_does_not_invent_myr(self):
-        from digest import upcoming_sessions
+        from services.digest_service import upcoming_sessions
         with self.Session() as db:
             bare = fill_course(Course(source_key='fee-no-currency'), sample('Fee only', start='2099-10-01'))
             bare.fee = 120
@@ -405,7 +408,7 @@ class DigestCertificateTests(unittest.TestCase):
 
     def test_digest_unsubscribe_falls_back_to_public_api_base(self):
         """API-direct demos without PUBLIC_FRONTEND_BASE still get a working unsubscribe host."""
-        from digest import run_due_digests
+        from services.digest_service import run_due_digests
         from portal_models import DigestPreference
 
         self.client.patch('/api/v1/me/digest', json={'opted_in': True})
@@ -422,7 +425,7 @@ class DigestCertificateTests(unittest.TestCase):
 
     def test_digest_unsubscribe_whitespace_frontend_base_falls_back(self):
         """Whitespace-only PUBLIC_FRONTEND_BASE must not invent a blank host (parity with OAuth strip)."""
-        from digest import run_due_digests
+        from services.digest_service import run_due_digests
         from portal_models import DigestPreference
 
         self.client.patch('/api/v1/me/digest', json={'opted_in': True})
@@ -495,7 +498,7 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertEqual(json_blank.json()['error']['code'], 'not_found')
 
     def test_digest_html_escapes_catalogue_fields(self):
-        from digest import compose_digest, render_html, render_text
+        from services.digest_service import compose_digest, render_html, render_text
         from portal_models import Account, Course, fill_course
 
         with self.Session() as db:
@@ -518,7 +521,7 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertIn('Unsubscribe: http://example.test/unsub?token=abc', render_text(payload, 'http://example.test/unsub?token=abc'))
 
     def test_digest_plain_html_name_and_place_parity(self):
-        from digest import render_html, render_text
+        from services.digest_service import render_html, render_text
 
         for blank in (None, '', '   '):
             payload = {
@@ -546,14 +549,14 @@ class DigestCertificateTests(unittest.TestCase):
     def test_digest_failure_uses_bounded_backoff(self):
         self.client.patch('/api/v1/me/digest', json={'opted_in': True})
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': PASSWORD})
-        with patch('digest.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
+        with patch('services.digest_service.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
             first = self.client.post('/api/v1/admin/digests/run')
             self.assertEqual(first.status_code, 200, first.text)
             self.assertEqual(first.json()['failed'], 1)
             second = self.client.post('/api/v1/admin/digests/run')
             self.assertEqual(second.json()['failed'], 0)
             self.assertEqual(second.json()['sent'], 0)
-        from digest import backoff_seconds
+        from services.digest_service import backoff_seconds
         from portal_models import DigestPreference
         with self.Session() as db:
             pref = db.get(DigestPreference, self.doc_id)
@@ -563,7 +566,7 @@ class DigestCertificateTests(unittest.TestCase):
             self.assertEqual(backoff_seconds(8), 24 * 3600)
             pref.next_retry_at = time.time() - 1
             db.commit()
-        with patch('digest.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
+        with patch('services.digest_service.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
             retried = self.client.post('/api/v1/admin/digests/run')
         self.assertEqual(retried.json()['failed'], 1)
         with self.Session() as db:
@@ -573,7 +576,7 @@ class DigestCertificateTests(unittest.TestCase):
     def test_reopt_in_clears_send_backoff(self):
         self.client.patch('/api/v1/me/digest', json={'opted_in': True})
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': PASSWORD})
-        with patch('digest.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
+        with patch('services.digest_service.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
             failed = self.client.post('/api/v1/admin/digests/run')
             self.assertEqual(failed.json()['failed'], 1)
         self.client.post('/api/v1/auth/login', json={'email': 'doc@example.com', 'password': PASSWORD})
@@ -595,7 +598,7 @@ class DigestCertificateTests(unittest.TestCase):
             self.assertIsNone(pref.next_retry_at)
         # Idempotent opted_in=true while already in must not wipe an active backoff.
         self.client.post('/api/v1/auth/login', json={'email': 'op@example.com', 'password': PASSWORD})
-        with patch('digest.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
+        with patch('services.digest_service.send_via_provider', return_value={'status': 'failed', 'provider_message_id': None, 'error': 'SMTP down'}):
             self.assertEqual(self.client.post('/api/v1/admin/digests/run').json()['failed'], 1)
         self.client.post('/api/v1/auth/login', json={'email': 'doc@example.com', 'password': PASSWORD})
         with self.Session() as db:
@@ -635,7 +638,7 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertEqual(body['recorded_points_snapshot'], 4)
         self.assertIn('CERT-01', body['disclaimer_version'])
         self.assertEqual(body['download_url'], body['download_path'])
-        download = self.client.get(body['download_path'])
+        download = self.client.get(body['pdf_download_url'])
         self.assertEqual(download.status_code, 200)
         self.assertEqual(download.headers['content-type'], 'application/pdf')
         disposition = download.headers.get('content-disposition', '')
@@ -648,7 +651,7 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertIn(body['document_hash'].encode(), download.content)
         self.assertIn(b'/Title (', download.content)
         self.assertIn(b'/Info 6 0 R', download.content)
-        bad_format = self.client.get(body['download_path'] + '?format=xml')
+        bad_format = self.client.get(body['download_path'].split('?')[0] + '?format=xml')
         self.assertEqual(bad_format.status_code, 422)
         bad_year = self.client.post('/api/v1/me/certificates', json={'year': 1800})
         self.assertEqual(bad_year.status_code, 422)
@@ -658,7 +661,7 @@ class DigestCertificateTests(unittest.TestCase):
         default_year = self.client.post('/api/v1/me/certificates', json={})
         self.assertEqual(default_year.status_code, 201, default_year.text)
         self.assertEqual(default_year.json()['year'], today().year)
-        html = self.client.get(body['download_path'] + '?format=html')
+        html = self.client.get(body['print_url'])
         self.assertEqual(html.status_code, 200)
         self.assertIn('CareCredits', html.text)
         self.assertIn('not an MMC', html.text)
@@ -666,9 +669,9 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertIn('APC', html.text)
         # Unicode names fold for Helvetica PDF but remain intact in HTML.
         from types import SimpleNamespace
-        from certificates import _pdf_escape, render_html, render_pdf
+        from services.certificate_service import _pdf_escape, render_html, render_pdf
 
-        self.assertIn('Jose', _pdf_escape('José'))
+        self.assertIn('José', _pdf_escape('José'))
         self.assertNotIn('\u0301', _pdf_escape('José'))
         # Whitespace-only city must not paint a dangling " · " on PDF/HTML.
         blank_city = SimpleNamespace(email='c@example.com', name='  Dr Pad  ', city='   ')
@@ -680,6 +683,7 @@ class DigestCertificateTests(unittest.TestCase):
             disclaimer_version='CERT-01-v1',
             id='certblank1',
         )
+        cert_row._identity_snapshot = vars(blank_city)
         html_blank = render_html(blank_city, cert_row)
         self.assertIn('Dr Pad', html_blank)
         self.assertNotIn('·', html_blank.split('calendar year')[1].split('</p>')[0])
@@ -689,6 +693,7 @@ class DigestCertificateTests(unittest.TestCase):
         self.assertNotIn(b'calendar year 2026 \xb7', pdf_blank)
         # Whitespace-only / blank display name falls back to Doctor on PDF and HTML.
         blank_name = SimpleNamespace(email='n@example.com', name='   ', city='KL')
+        cert_row._identity_snapshot = vars(blank_name)
         html_name = render_html(blank_name, cert_row)
         self.assertIn('<strong>Doctor</strong>', html_name)
         self.assertNotIn('<strong>   </strong>', html_name)

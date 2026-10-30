@@ -119,7 +119,7 @@ BACKEND_OPTIONAL = (
 )
 
 # Keep local Next instances (3000–3040) mutating the API without a wildcard origin.
-# Must stay aligned with backend.main.DEFAULT_ALLOWED_ORIGINS and .env.sample.
+# Must stay aligned with backend.http_boundary.DEFAULT_ALLOWED_ORIGINS and .env.sample.
 LOCAL_DEV_ALLOWED_ORIGINS = (
     'http://localhost:3000,http://127.0.0.1:3000,'
     'http://localhost:3010,http://127.0.0.1:3010,'

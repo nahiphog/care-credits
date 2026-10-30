@@ -1,0 +1,49 @@
+/* Shared components must work on fresh visits to every route. */
+.modal-shade { position:fixed; inset:0; z-index:100; background:#10245480; backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:24px; overscroll-behavior:contain; }
+.modal-shade .modal { position:relative; background:white; color:#102454; border-radius:14px; width:100%; max-width:760px; max-height:90dvh; overflow:auto; overscroll-behavior:contain; padding:32px; box-sizing:border-box; }
+.modal-shade .modal h2 { margin:16px 32px 12px 0; font-size:26px; line-height:1.25; overflow-wrap:anywhere; }
+.modal-shade .modal p { line-height:1.65; }
+.modal-shade .modal-close { position:absolute; right:12px; top:12px; border:0; background:#edf3fc; border-radius:6px; padding:8px; cursor:pointer; }
+.modal-shade .detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; background:#f4f7fc; border-radius:8px; padding:18px; margin:20px 0; }
+.modal-shade .detail-grid small { display:block; margin-bottom:5px; color:#58709e; }
+.modal-shade .detail-grid strong { font-size:14px; overflow-wrap:anywhere; }
+.modal-shade .form-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.modal-shade label, .dash #live-location label, .dash .right-column > .card > label { display:block; margin:14px 0; font-size:14px; line-height:1.6; }
+.modal-shade input:not([type=checkbox]), .modal-shade select, .modal-shade textarea,
+.dash #live-location input:not([type=checkbox]), .dash #live-location textarea, .dash .right-column > .card > label select { display:block; width:100%; box-sizing:border-box; padding:10px 12px; margin-top:5px; border:1px solid #cbd8ea; border-radius:7px; color:#102454; background:white; font:inherit; }
+.modal-shade input[type=checkbox], .dash #live-location input[type=checkbox] { width:auto; margin-right:8px; }
+.modal-shade .button-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.modal-shade .secondary, .modal-shade .primary { display:inline-flex; align-items:center; gap:6px; padding:11px 14px; border:1px solid #cbd8ea; border-radius:7px; cursor:pointer; }
+.modal-shade .primary { background:#1965ef; color:white; }
+.modal-shade .text-btn { color:#1463e9; border:0; background:transparent; cursor:pointer; }
+.modal-shade .small-note { font-size:13px; color:#58709e; }
+.modal-shade .evidence div { display:grid; grid-template-columns:110px minmax(0,1fr); gap:12px; margin:10px 0; }
+.modal-shade .evidence dd { margin:0; overflow-wrap:anywhere; }
+.public-page { max-width:860px; margin:0 auto; padding:32px 24px; color:#102454; font-family:system-ui,sans-serif; }
+.public-page .public-header { padding:32px; margin:30px 0; border-radius:14px; background:#eef4ff; }
+.public-page h1 { font-size:34px; overflow-wrap:anywhere; }
+.public-page .public-course { display:flex; flex-wrap:wrap; align-items:center; gap:16px; border:1px solid #dbe6f7; border-radius:10px; padding:20px; margin:16px 0; }
+.public-page .public-course > div { flex:1; min-width:0; overflow-wrap:anywhere; }
+.public-page .section-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; }
+.public-page .empty-state { padding:32px; border:1px dashed #cbd8ea; margin-top:24px; }
+.public-page button { padding:10px 14px; border:1px solid #cbd8ea; border-radius:7px; background:white; cursor:pointer; }
+.public-page footer { margin-top:32px; font-size:13px; line-height:1.6; }
+:is(button,a,input,select,textarea):focus-visible { outline:3px solid #2563eb; outline-offset:3px; }
+.password-settings label { display:block; margin:14px 0; font-size:14px; }
+.password-settings input { display:block; width:100%; box-sizing:border-box; border:1px solid #cbd8ea; padding:10px; border-radius:7px; margin-top:6px; font:inherit; }
+.certificate-history { list-style:none; padding:0; margin:20px 0; }
+.certificate-history > li { padding:18px 0; border-top:1px solid #dbe6f7; }
+.certificate-history .button-row { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+.certificate-history .secondary { display:inline-flex; padding:9px 12px; border:1px solid #cbd8ea; border-radius:7px; color:#1463e9; }
+.dash .right-column > section:has(#certificate-history-title) { background:white; border:1px solid #e2eafb; border-radius:13px; padding:20px; }
+.dash .sidebar, .workspace-shell .sidebar { overflow-y:auto; }
+@media(max-width:850px) { .workspace-shell .sidebar:not(.is-open) { visibility:hidden; } }
+@media(max-width:580px) { .modal-shade { padding:10px; } .modal-shade .modal { padding:24px 18px; max-height:94dvh; } .modal-shade .form-grid { grid-template-columns:1fr; } .modal-shade .evidence div { grid-template-columns:1fr; } }
+@media print { .public-page > a,.public-page .button-row { display:none; } .public-page { max-width:none; padding:0; } .public-course { break-inside:avoid; } }
+
+.modal-shade .modal > .pill { display:inline-block; max-width:calc(100% - 44px); font-size:13px; line-height:1.6; }
+.modal-shade .button-row a { display:inline-flex; align-items:center; gap:6px; }
+.modal-shade .button-row a svg { flex-shrink:0; }
+.modal-shade .small-note { font-size:13px; color:#58709e; }
+.modal-shade hr { border:0; border-top:1px solid #dbe6f7; margin:22px 0; }
+.modal-shade h3 { font-size:18px; font-weight:600; margin:18px 0 12px; }

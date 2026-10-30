@@ -183,7 +183,7 @@ export function TrainingDetail({
           </div>
         </div>
         {(course.field_evidence?.length || Object.keys(course.evidence || {}).length) ? (
-          <dl className="evidence">
+          <details className="source-evidence"><summary>Source evidence</summary><p className="small-note">Quoted supporting text for the published course details.</p><dl className="evidence">
             {(course.field_evidence?.length
               ? course.field_evidence.map((row) => [row.field_name, row.excerpt] as const)
               : Object.entries(course.evidence)
@@ -193,7 +193,7 @@ export function TrainingDetail({
                 <dd>{excerpt}</dd>
               </div>
             ))}
-          </dl>
+          </dl></details>
         ) : null}
         <div className="button-row">
           {registrationHref ? (

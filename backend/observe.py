@@ -62,7 +62,7 @@ def request_line(request_id: str, method: str, path: str, status: int, duration_
 
 
 def failure_line(request_id: str, status: int, message: str):
-    log.warning('failure id=%s status=%s message=%s', request_id, status, str(message)[:200])
+    (log.error if status >= 500 else log.warning)('failure id=%s status=%s message=%s', request_id, status, str(message)[:200])
 
 
 def job_line(job_id: str, status: str, candidate_count: int, source_count: int, usage, warning_count: int):

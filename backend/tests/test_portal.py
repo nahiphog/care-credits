@@ -13,7 +13,9 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from main import app, today, migrate_schema
+from main import app
+from domain.config import today
+from database.migrations import migrate_schema
 from database import Base, get_db
 from portal_models import Account, Audit, Course, Record, Job, Candidate, FieldEvidence, LoginSession, SchemaVersion, SourceDocument, Throttle, fill_course, purge_expired_source_text
 from security import digest, password_hash
@@ -23,7 +25,7 @@ HASH = password_hash(PASSWORD)
 
 
 def sample(title='GP training'):
-    quote='GP training by Learning Institute in Malaysia Kuala Lumpur online. 2026-01-01. CPD points 2.'
+    quote=f'{title} by Learning Institute in Malaysia Kuala Lumpur online. 2026-01-01. CPD points 2.'
     return {'title':title, 'provider':'Learning Institute', 'mode':'online', 'country':'MY', 'start_date':'2026-01-01', 'city':None, 'source_url':'https://example.org/course', 'source_text':quote, 'points':2, 'credit_label':'CPD', 'evidence':{key:quote for key in ['title','provider','mode','country','start_date','points','credit_label']}}
 
 
@@ -40,7 +42,7 @@ class PortalTests(unittest.TestCase):
         self.env=patch.dict(os.environ,{'APP_ENV':'test','DEMO_MODE':'false','SCRAPER_SERVICE_TOKEN':'test-service-token','ALLOW_SIGNUP':'true','DAILY_SCRAPE_ENABLED':'false','DIGEST_ENABLED':'false'})
         self.env.start()
         self.scraper_ready=patch(
-            'main._scraper_service_status',
+            'services.discovery_status_service._scraper_service_status',
             return_value={'status': 'ready', 'reachable': True, 'tavily_configured': True, 'model_ready': True},
         )
         self.scraper_ready.start()
@@ -96,7 +98,7 @@ class PortalTests(unittest.TestCase):
                 self.assertEqual(allowed.status_code, 200, allowed.text)
                 self.login()
         # Trailing slash on Origin or allowlist entry must not block a real browser origin.
-        from main import origin_allowed
+        from http_boundary import origin_allowed
 
         self.assertTrue(origin_allowed('http://127.0.0.1:3000/', ['http://127.0.0.1:3000']))
         self.assertTrue(origin_allowed('http://127.0.0.1:3000', ['http://127.0.0.1:3000/']))
@@ -138,7 +140,8 @@ class PortalTests(unittest.TestCase):
         self.assertIn('oauth_state', set_cookie.lower())
         # Production Secure flags must be present on set and matching delete for both cookies.
         # Padded / mixed-case APP_ENV uses the same strip+casefold production_env path.
-        from main import production_env, _session_cookie_kwargs, _oauth_state_cookie_kwargs
+        from domain.config import production_env
+        from routers.auth import _session_cookie_kwargs, _oauth_state_cookie_kwargs
 
         for env_value in ('Production', ' production ', 'PRODUCTION'):
             with self.subTest(app_env=env_value), patch.dict(os.environ, {'APP_ENV': env_value}):
@@ -164,7 +167,7 @@ class PortalTests(unittest.TestCase):
 
     def test_login_without_peer_address_still_authenticates(self):
         from starlette.requests import Request
-        from main import client_host
+        from http_boundary import client_host
 
         scope = {
             'type': 'http',
@@ -180,7 +183,7 @@ class PortalTests(unittest.TestCase):
             'server': ('127.0.0.1', 8000),
         }
         self.assertEqual(client_host(Request(scope)), 'unknown')
-        with patch('main.client_host', return_value='unknown'):
+        with patch('routers.auth.client_host', return_value='unknown'):
             result = self.client.post('/api/v1/auth/login', json={'email': 'a@example.com', 'password': PASSWORD})
         self.assertEqual(result.status_code, 200, result.text)
 
@@ -589,7 +592,7 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/v1/admin/ingestion-jobs/'+claim['id']).status_code,403)
 
     def test_job_completion_stores_reported_usage_or_null(self):
-        from main import normalize_job_usage
+        from observe import normalize_job_usage
         self.assertEqual(
             normalize_job_usage({'tavily_credits': '2.5', 'model_tokens': '40', 'catalogue_saved': 1}),
             {'tavily_credits': 2.5, 'model_tokens': 40, 'catalogue_saved': 1},
@@ -732,7 +735,7 @@ class PortalTests(unittest.TestCase):
         """Conditional expire UPDATE must not interrupt a lease extended after the SELECT snapshot."""
         import time
         from unittest.mock import patch
-        from main import expire_jobs
+        from services.ingestion_job_service import expire_jobs
         from sqlalchemy import update as sa_update
 
         header={'Idempotency-Key':'expire-race-key'}
@@ -766,7 +769,7 @@ class PortalTests(unittest.TestCase):
             self.assertGreater(row.lease_until, time.time())
 
     def test_complete_upserts_pending_candidate_same_source_key(self):
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload=sample('Upsert Complete GP')
         key=make_source_key(payload)
         with self.Session() as db:
@@ -837,7 +840,7 @@ class PortalTests(unittest.TestCase):
 
     def test_complete_reopens_rejected_candidate_same_source_key(self):
         """Cross-job complete must reopen a rejected identity instead of forking a second review card."""
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Reopen Rejected GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -884,7 +887,7 @@ class PortalTests(unittest.TestCase):
 
     def test_complete_reopens_held_candidate_to_pending(self):
         """Cross-job complete with decision=new must reopen held→pending (bare refresh keeps held)."""
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Reopen Held GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -936,7 +939,7 @@ class PortalTests(unittest.TestCase):
             self.assertEqual((row.data or {}).get('_judgment', {}).get('decision'), 'new')
 
     def test_complete_does_not_500_when_job_already_has_rejected_same_key(self):
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Rejected Same Job GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -969,7 +972,7 @@ class PortalTests(unittest.TestCase):
 
     def test_complete_holds_refresh_when_source_key_already_published(self):
         """Bare complete against a published identity must hold a refresh, not fork a pending."""
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Published Complete Refresh GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -999,7 +1002,7 @@ class PortalTests(unittest.TestCase):
 
     def test_complete_bare_refresh_keeps_operator_hold_on_new(self):
         """Bare soft-refresh must not reopen an operator hold when prior judgment is decision=new."""
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Operator Hold Soft Refresh GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -1040,7 +1043,7 @@ class PortalTests(unittest.TestCase):
 
     def test_complete_bare_refresh_keeps_exists_refresh_diff(self):
         """Second bare soft-refresh of a held exists row must keep/recompute published-vs-proposed diff."""
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Exists Soft Refresh Diff GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -1080,7 +1083,8 @@ class PortalTests(unittest.TestCase):
             **payload,
             'fee': 180,
             'currency': 'MYR',
-            'evidence': {**payload['evidence'], 'fee': payload['source_text'], 'currency': payload['source_text']},
+            'source_text': payload['source_text'] + ' Fee MYR 180.',
+            'evidence': {**payload['evidence'], 'fee': 'Fee MYR 180.', 'currency': 'Fee MYR 180.'},
         }
         complete = self.client.post(
             '/internal/v1/jobs/' + claim['id'] + '/complete',
@@ -1102,7 +1106,7 @@ class PortalTests(unittest.TestCase):
             self.assertGreater(row.version, prior_version)
 
     def test_complete_pending_refresh_bumps_version(self):
-        from main import source_key as make_source_key
+        from services.catalogue_review import source_key as make_source_key
         payload = sample('Pending Refresh Version GP')
         key = make_source_key(payload)
         with self.Session() as db:
@@ -1334,7 +1338,7 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/v1/admin/trainings/'+extra+'/cancel').status_code,403)
 
     def test_publish_relists_cancelled_session_and_identity_conflict(self):
-        from main import source_key
+        from services.catalogue_review import source_key
         quote = 'Relist GP Day by Learning Institute in Malaysia Kuala Lumpur online. 2026-04-01. CPD points 2.'
         payload = {
             **sample('Relist GP Day'),
@@ -1413,7 +1417,7 @@ class PortalTests(unittest.TestCase):
 
     def test_publish_relists_cancelled_session_without_matched_course_id(self):
         """Corrections that realign to a cancelled identity re-list it (no resulting_course_id)."""
-        from main import source_key
+        from services.catalogue_review import source_key
         quote = 'Relist Drift GP by Learning Institute in Malaysia Kuala Lumpur online. 2026-04-02. CPD points 2.'
         cancelled_payload = {
             **sample('Relist Drift GP'),
@@ -1457,7 +1461,7 @@ class PortalTests(unittest.TestCase):
 
     def test_publish_relists_cancellation_status_drift(self):
         """cancellation_status=cancelled with published publication_status must re-list (listed_filter parity)."""
-        from main import source_key
+        from services.catalogue_review import source_key
         quote = (
             'Drift Relist GP by Learning Institute in Malaysia Kuala Lumpur online. '
             '2026-07-01. CPD points 2.'
@@ -1499,7 +1503,7 @@ class PortalTests(unittest.TestCase):
 
     def test_publish_matched_course_relists_cancelled_identity_conflict(self):
         """Matched-course publish that drifts onto a cancelled identity must re-list it (not 409)."""
-        from main import source_key
+        from services.catalogue_review import source_key
         matched_quote = (
             'Matched Relist GP by Learning Institute in Malaysia Kuala Lumpur online. '
             '2026-06-01. CPD points 2. Also Cancelled Target GP on 2026-06-02.'
@@ -1769,7 +1773,7 @@ class PortalTests(unittest.TestCase):
             migrate_schema(db)
             stored=db.get(Course,self.course)
             self.assertEqual((stored.title, stored.city), ('Backfilled GP','Johor Bahru'))
-            self.assertEqual(max(v.version for v in db.query(SchemaVersion).all()), 17)
+            self.assertEqual(max(v.version for v in db.query(SchemaVersion).all()), 18)
             self.assertIn('identity_issuer', {c['name'] for c in inspect(db.get_bind()).get_columns('accounts')})
             self.assertIn('verification_status', {c['name'] for c in inspect(db.get_bind()).get_columns('courses')})
             self.assertIn('publication_status', {c['name'] for c in inspect(db.get_bind()).get_columns('courses')})
@@ -1842,7 +1846,7 @@ class PortalTests(unittest.TestCase):
             db.commit()
         service={'Authorization':'Bearer test-service-token'}
         self.assertEqual(self.client.post('/internal/v1/jobs/claim',headers=service).status_code,204)
-        with patch('main._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False, 'reachable': True, 'status': 'ready'}):
+        with patch('services.discovery_status_service._scraper_service_status', return_value={'tavily_configured': True, 'model_ready': False, 'reachable': True, 'status': 'ready'}):
             blocked=self.client.post('/api/v1/admin/ingestion-jobs/'+job['id']+'/retry')
         self.assertEqual(blocked.status_code,409,blocked.text)
         self.assertEqual(
@@ -1997,7 +2001,7 @@ class PortalTests(unittest.TestCase):
         self.assertIsNone(cleared.json()['location_consent_at'])
 
     def test_two_sessions_on_one_page_stay_distinct(self):
-        from main import source_key
+        from services.catalogue_review import source_key
         page='https://example.org/afpm-weekend'
         first={**sample('Saturday workshop'),'start_date':'2026-08-01','source_url':page}
         second={**sample('Sunday workshop'),'start_date':'2026-08-02','source_url':page}
@@ -2177,6 +2181,11 @@ class PortalTests(unittest.TestCase):
 
     def test_operator_services_read_scraper_ready_flags(self):
         class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                import json
+                return json.loads(self.read())
             def read(self):
                 return b'{"status":"ready","tavily_configured":true,"model_ready":false,"missing":["SECRET"]}'
 
@@ -2189,7 +2198,7 @@ class PortalTests(unittest.TestCase):
         self.scraper_ready.stop()
         try:
             with patch.dict(os.environ, {'SCRAPER_HEALTH_URL': 'http://127.0.0.1:8002'}, clear=False), patch(
-                'main.urlopen', return_value=FakeResponse()
+                'infrastructure.scraper_client.httpx.get', return_value=FakeResponse()
             ):
                 self.login()
                 body = self.client.get('/api/v1/admin/services').json()
@@ -2204,6 +2213,11 @@ class PortalTests(unittest.TestCase):
         self.assertNotIn('missing', body['scraper'])
 
         class ModelOnlyResponse:
+            status_code = 200
+
+            def json(self):
+                import json
+                return json.loads(self.read())
             def read(self):
                 return b'{"status":"ready","tavily_configured":false,"model_ready":true}'
 
@@ -2216,7 +2230,7 @@ class PortalTests(unittest.TestCase):
         self.scraper_ready.stop()
         try:
             with patch.dict(os.environ, {'SCRAPER_HEALTH_URL': 'http://127.0.0.1:8002'}, clear=False), patch(
-                'main.urlopen', return_value=ModelOnlyResponse()
+                'infrastructure.scraper_client.httpx.get', return_value=ModelOnlyResponse()
             ):
                 model_only = self.client.get('/api/v1/admin/services').json()
                 blocked = self.client.post(
@@ -2232,6 +2246,11 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(blocked.status_code, 409, blocked.text)
 
         class LiveReadyResponse:
+            status_code = 200
+
+            def json(self):
+                import json
+                return json.loads(self.read())
             def read(self):
                 return b'{"status":"ready","tavily_configured":true,"model_ready":true}'
 
@@ -2244,7 +2263,7 @@ class PortalTests(unittest.TestCase):
         self.scraper_ready.stop()
         try:
             with patch.dict(os.environ, {'SCRAPER_HEALTH_URL': 'http://127.0.0.1:8002'}, clear=False), patch(
-                'main.urlopen', return_value=LiveReadyResponse()
+                'infrastructure.scraper_client.httpx.get', return_value=LiveReadyResponse()
             ):
                 ready = self.client.get('/api/v1/admin/services').json()
         finally:
@@ -2254,7 +2273,7 @@ class PortalTests(unittest.TestCase):
 
     def test_public_config_is_login_flags_only(self):
         body = self.client.get('/api/v1/config').json()
-        self.assertEqual(set(body), {'demo', 'signup_enabled', 'oauth_google', 'discovery_max_results'})
+        self.assertEqual(set(body), {'demo', 'signup_enabled', 'oauth_google', 'discovery_max_results', 'digest_available', 'password_change_available', 'default_timezone'})
 
     def test_publish_stores_source_review_and_field_evidence(self):
         from portal_models import FieldEvidence
@@ -2651,7 +2670,7 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(by_job.json()['job_id'],job_id)
         self.assertTrue(all(item['job_id']==job_id for item in by_job.json()['items']))
         self.assertEqual(self.client.get('/api/v1/admin/candidates?job_id='+other_id).json()['total'],1)
-        self.assertEqual(self.client.get('/api/v1/admin/candidates?status=published').status_code,422)
+        self.assertEqual(self.client.get('/api/v1/admin/candidates?status=published').status_code,200)
         stale=self.client.post('/api/v1/admin/candidates/'+cid+'/review',json={'action':'hold','reason':'Need MMC confirmation','version':99})
         self.assertEqual(stale.status_code,409)
         self.assertEqual(stale.json()['error']['code'],'conflict')
@@ -2788,7 +2807,7 @@ class PortalTests(unittest.TestCase):
         with self.Session() as db:
             db.add(Throttle(key=bucket, count=10))
             db.commit()
-        with patch('main.client_host', return_value=peer):
+        with patch('routers.auth.client_host', return_value=peer):
             blocked = self.client.post(
                 '/api/v1/auth/register',
                 json={
@@ -3004,7 +3023,7 @@ class PortalTests(unittest.TestCase):
 
     def test_aged_stuck_running_null_started_at_expires(self):
         """running + future lease_until + null started_at cannot complete; expire then purge."""
-        from main import expire_jobs
+        from services.ingestion_job_service import expire_jobs
 
         with self.Session() as db:
             stuck = Job(
@@ -3045,7 +3064,7 @@ class PortalTests(unittest.TestCase):
 
     def test_expire_jobs_honours_started_at_deadline_with_future_lease(self):
         """Heartbeat/complete refuse started_at older than 5 minutes; expire must match."""
-        from main import expire_jobs
+        from services.ingestion_job_service import expire_jobs
 
         with self.Session() as db:
             stuck = Job(
@@ -3069,7 +3088,7 @@ class PortalTests(unittest.TestCase):
 
     def test_expire_jobs_clears_leftover_lease_on_idle_rows(self):
         """Idle/terminal rows (including queued) must not keep lease fields after expire sweep."""
-        from main import expire_jobs
+        from services.ingestion_job_service import expire_jobs
 
         with self.Session() as db:
             idle = Job(
@@ -3155,7 +3174,7 @@ class PortalTests(unittest.TestCase):
             stuck_id = stuck.id
         service = {'Authorization': 'Bearer test-service-token'}
         with patch(
-            'main._scraper_service_status',
+            'services.discovery_status_service._scraper_service_status',
             return_value={'tavily_configured': True, 'model_ready': False, 'reachable': True, 'status': 'ready'},
         ):
             claim = self.client.post('/internal/v1/jobs/claim', headers=service)
@@ -3170,7 +3189,7 @@ class PortalTests(unittest.TestCase):
 
     def test_aged_stuck_running_null_lease_expires_then_purges(self):
         """running + null lease_until is aged-stuck: expire_jobs then retention can blank snippets."""
-        from main import expire_jobs
+        from services.ingestion_job_service import expire_jobs
 
         with self.Session() as db:
             stuck = Job(

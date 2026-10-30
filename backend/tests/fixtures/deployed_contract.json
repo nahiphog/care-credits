@@ -127,6 +127,13 @@
       null
     ],
     [
+      "/api/v1/auth/password",
+      [
+        "POST"
+      ],
+      null
+    ],
+    [
       "/api/v1/auth/register",
       [
         "POST"
@@ -163,6 +170,13 @@
     ],
     [
       "/api/v1/me/audit",
+      [
+        "GET"
+      ],
+      null
+    ],
+    [
+      "/api/v1/me/certificates",
       [
         "GET"
       ],
@@ -326,6 +340,13 @@
       "/internal/v1/jobs/{job_id}/heartbeat",
       [
         "POST"
+      ],
+      null
+    ],
+    [
+      "/internal/v1/maintenance",
+      [
+        "GET"
       ],
       null
     ]
@@ -1196,6 +1217,68 @@
       ],
       [
         "snippet",
+        "VARCHAR",
+        false,
+        false
+      ]
+    ],
+    "account_profiles": [
+      [
+        "account_id",
+        "VARCHAR",
+        false,
+        true
+      ],
+      [
+        "name",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "city",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "state",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "latitude",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "longitude",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "location_consent_at",
+        "FLOAT",
+        true,
+        false
+      ],
+      [
+        "public_enabled",
+        "BOOLEAN",
+        false,
+        false
+      ],
+      [
+        "public_slug",
+        "VARCHAR",
+        false,
+        false
+      ],
+      [
+        "bio",
         "VARCHAR",
         false,
         false

@@ -56,7 +56,7 @@ def _candidate_payload(title, start_date, source_key_suffix):
 
 
 def seed(db):
-    from main import today
+    from domain.config import today
 
     demo_hash = password_hash(DEMO_PASSWORD)
     for email, name, role in [
@@ -252,7 +252,7 @@ def seed(db):
         .count()
     )
     if reviewable == 0:
-        from catalogue import exact_course, source_key as course_source_key
+        from services.catalogue_review import exact_course, source_key as course_source_key
 
         queue_payload = _candidate_payload(
             'Offline review queue (demo)',

@@ -72,7 +72,12 @@ async function proxy(request: NextRequest, path: string[]) {
     if (['host', 'connection', 'content-length'].includes(key.toLowerCase())) return;
     headers.set(key, value);
   });
-  const init: RequestInit = { method: request.method, headers, redirect: 'manual' };
+  const discoveryRun = request.method === 'POST' && /^admin\/ingestion-jobs\/[^/]+\/run$/.test(joined);
+  const timeout = AbortSignal.timeout(discoveryRun ? 240_000 : 30_000);
+  const init: RequestInit = {
+    method: request.method, headers, redirect: 'manual',
+    signal: AbortSignal.any([request.signal, timeout]),
+  };
   if (!['GET', 'HEAD'].includes(request.method)) {
     init.body = await request.arrayBuffer();
   }
@@ -114,6 +119,11 @@ async function proxy(request: NextRequest, path: string[]) {
     }
     return response;
   } catch {
+    if (timeout.aborted) {
+      return localEnvelope(request, 504, apiErrorBody('timeout', discoveryRun
+        ? 'Discovery is taking longer than expected. Refresh the run status before starting another run.'
+        : 'The request took too long. Check whether it completed before trying again.', rid));
+    }
     return localEnvelope(request, 503, unavailableBody(rid));
   }
 }

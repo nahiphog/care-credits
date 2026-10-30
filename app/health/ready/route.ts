@@ -10,7 +10,7 @@ function backendBase() {
 export async function GET(request: NextRequest) {
   const rid = request.headers.get('x-request-id') || crypto.randomUUID();
   try {
-    const response = await fetch(backendBase() + '/health/ready', { cache: 'no-store' });
+    const response = await fetch(backendBase() + '/health/ready', { cache: 'no-store', signal: AbortSignal.timeout(5_000) });
     const payload = await response.json().catch(() => null);
     // Only claim ready when the backend HTTP status and body both say ready.
     if (!response.ok || !payload || payload.status !== 'ready') {

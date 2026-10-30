@@ -4,6 +4,15 @@ import { useState } from 'react';
 import { Check, ExternalLink, Pause } from 'lucide-react';
 import { Candidate, feeLabel, formatDate, publicWebUrl } from '@/lib/portal';
 
+const REVIEW_FIELDS = [
+  ['title', 'Title'], ['provider', 'Provider'], ['description', 'Description'],
+  ['start_date', 'Start date'], ['end_date', 'End date'], ['timezone', 'Timezone'],
+  ['venue', 'Venue'], ['city', 'City'], ['state', 'State'], ['mode', 'Delivery mode'],
+  ['fee', 'Fee'], ['currency', 'Currency'], ['points', 'Advertised points'],
+  ['credit_label', 'Credit label'], ['difficulty', 'Level'],
+  ['prerequisites', 'Prerequisites'], ['registration_url', 'Provider registration URL'],
+] as const;
+
 export function CandidateCard({
   candidate,
   saving,
@@ -21,34 +30,15 @@ export function CandidateCard({
   ) => void;
 }) {
   const [reason, setReason] = useState(candidate.reason || '');
-  const [edits, setEdits] = useState<Record<string, string>>({
-    title: candidate.data.title || '',
-    provider: candidate.data.provider || '',
-    start_date: candidate.data.start_date || '',
-    venue: candidate.data.venue || '',
-    city: candidate.data.city || '',
-    fee: candidate.data.fee == null ? '' : String(candidate.data.fee),
-    points: candidate.data.points == null ? '' : String(candidate.data.points),
-  });
-  const [excerpts, setExcerpts] = useState<Record<string, string>>({
-    title: candidate.data.evidence?.title || '',
-    provider: candidate.data.evidence?.provider || '',
-    start_date: candidate.data.evidence?.start_date || '',
-    venue: candidate.data.evidence?.venue || '',
-    city: candidate.data.evidence?.city || '',
-    fee: candidate.data.evidence?.fee || '',
-    points: candidate.data.evidence?.points || '',
-  });
+  const original = Object.fromEntries(REVIEW_FIELDS.map(([field]) => [
+    field, candidate.data[field] == null ? '' : String(candidate.data[field]),
+  ])) as Record<string, string>;
+  const [edits, setEdits] = useState<Record<string, string>>({ ...original });
+  const [excerpts, setExcerpts] = useState<Record<string, string>>(
+    Object.fromEntries(REVIEW_FIELDS.map(([field]) => [field, candidate.data.evidence?.[field] || ''])),
+  );
   const sourceHref = publicWebUrl(candidate.data.source_url);
-  const original: Record<string, string> = {
-    title: candidate.data.title || '',
-    provider: candidate.data.provider || '',
-    start_date: candidate.data.start_date || '',
-    venue: candidate.data.venue || '',
-    city: candidate.data.city || '',
-    fee: candidate.data.fee == null ? '' : String(candidate.data.fee),
-    points: candidate.data.points == null ? '' : String(candidate.data.points),
-  };
+  const published = candidate.status === 'published';
   function publishPayload() {
     const corrections: Record<string, string> = {};
     const evidence: Record<string, string> = {};
@@ -67,12 +57,13 @@ export function CandidateCard({
   function publishReady() {
     const { corrections, evidence } = publishPayload();
     const fields = Object.keys(corrections);
-    if (!fields.length) return true;
+    if (!fields.length) return !published;
+    if (published && reason.trim().length < 3) return false;
     // Backend rejects corrections without a verbatim excerpt present in source_text.
     if (!hasSourceText) return false;
     return fields.every((field) => {
       const excerpt = (evidence[field] || '').trim();
-      return excerpt.length > 0 && sourceText.includes(excerpt);
+      return excerpt.length > 0 && sourceText.replace(/\s+/g, ' ').includes(excerpt.replace(/\s+/g, ' '));
     });
   }
   const canPublish = publishReady();
@@ -141,17 +132,11 @@ export function CandidateCard({
           </div>
         ))}
       </dl>
-      {(
-        [
-          ['title', 'Corrected title'],
-          ['provider', 'Corrected provider'],
-          ['start_date', 'Corrected start date'],
-          ['venue', 'Corrected venue'],
-          ['city', 'Corrected city'],
-          ['fee', 'Corrected fee'],
-          ['points', 'Corrected points'],
-        ] as const
-      ).map(([field, label]) => (
+      {hasSourceText && <details><summary>Stored source text</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 240, overflow: 'auto' }}>{sourceText}</pre></details>}
+      <details open={published}>
+        <summary>{published ? 'Correct published details' : 'Correct extracted details'}</summary>
+        <p className="small-note">Keep unknown values blank. Every changed value needs a supporting quote from the stored source text.</p>
+      {REVIEW_FIELDS.map(([field, label]) => (
         <div key={field}>
           <label>
             {label}
@@ -170,6 +155,7 @@ export function CandidateCard({
           ) : null}
         </div>
       ))}
+      </details>
       <label>
         Review reason
         <textarea
@@ -177,7 +163,7 @@ export function CandidateCard({
           rows={2}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder={candidate.status === 'held' ? 'Required to keep this on hold' : 'Required to hold or reject; optional for publish'}
+          placeholder={published ? 'Explain why the published details need correcting' : candidate.status === 'held' ? 'Required to keep this on hold' : 'Required to hold or reject; optional for publish'}
         />
       </label>
       {candidate.reason ? <p className="small-note">Last reason: {candidate.reason}</p> : null}
@@ -185,13 +171,14 @@ export function CandidateCard({
         Confirm the extracted values match the source, including Malaysia eligibility. Publishing is not accreditation
         verification.
       </p>
-      {!canPublish ? (
+      {!canPublish && (!published || Object.keys(publishPayload().corrections).length > 0) ? (
         <p className="small-note" data-testid="publish-needs-excerpts">
           {hasSourceText
             ? 'Add a verbatim source excerpt (copied from the stored source text) for each corrected field before publishing.'
             : 'Source text is missing, so field corrections cannot be published. Reject, hold, or ingest a better source.'}
         </p>
       ) : null}
+      {published && <p className="small-note">Changes update the existing catalogue course and keep an audit trail. Add a review reason before saving.</p>}
       <div className="button-row">
         <button
           disabled={saving || !canPublish}
@@ -201,22 +188,22 @@ export function CandidateCard({
             onReview(candidate.id, 'publish', reason, candidate.version, payload.corrections, payload.evidence);
           }}
         >
-          <Check size={16} /> Publish reviewed training
+          <Check size={16} /> {published ? 'Save reviewed corrections' : 'Publish reviewed training'}
         </button>
-        <button
+        {!published && <button
           disabled={saving || reason.trim().length < 3}
           className="secondary"
           onClick={() => onReview(candidate.id, 'hold', reason, candidate.version)}
         >
           <Pause size={16} /> Hold
-        </button>
-        <button
+        </button>}
+        {!published && <button
           disabled={saving || reason.trim().length < 3}
           className="secondary"
           onClick={() => onReview(candidate.id, 'reject', reason, candidate.version)}
         >
           Reject
-        </button>
+        </button>}
       </div>
     </section>
   );

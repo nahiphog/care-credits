@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 root=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(root),str(root/'backend')]
 load_dotenv(root/'.env')
-from main import initialize
+from lifecycle import initialize
 from database import SessionLocal
 from portal_models import Account, SCHEMA_VERSION
 from security import password_hash

@@ -76,3 +76,10 @@
   .dash .filter-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
   .dash .filter-dialog .filter-actions { bottom: 0; }
 }
+.dash .page-heading { font-size:24px; margin:6px 0 18px; outline:none; }
+.dash .dashboard-grid.single-feature { grid-template-columns:minmax(0,1fr); }
+.dash .dashboard-grid.single-feature > .right-column { width:100%; max-width:980px; }
+.dash .left-column, .dash .right-column, .dash .event-name, .dash .profile > div { min-width:0; }
+.dash .profile strong, .dash .event-name strong { overflow-wrap:anywhere; }
+@media (max-width:1250px) { .dash .dashboard-grid { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:830px) { .dash .sidebar:not(.sidebar-open) { visibility:hidden; } }

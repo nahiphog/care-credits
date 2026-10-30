@@ -254,6 +254,7 @@ def run_job(job, heartbeat, client=None, *, review_only=False):
                     if not snippet_only:
                         try:
                             page_candidates = extract_training(source, usage=model_usage)
+                            warnings.extend(model_usage.pop('extraction_warnings', []))
                         except ExtractionError as exc:
                             warnings.append(str(exc) + ' Heuristic candidate held for review.')
                             page_candidates = heuristic_extract(source)

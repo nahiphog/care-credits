@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import secrets
 import sys
+import time
 from datetime import date
 import httpx
 from dotenv import dotenv_values
@@ -12,13 +13,16 @@ sys.path.insert(0, str(root / 'backend'))
 settings = dotenv_values(root / '.env.vercel.production')
 os.environ['DATABASE_URL'] = settings['DATABASE_URL_UNPOOLED']
 from database import SessionLocal, Base
-from portal_models import Account, Course, fill_course
+from models import Account, Course
+from repository.model_helpers import fill_course, listed_filter
+from sqlalchemy import or_
 
 base = sys.argv[1].rstrip('/')
 tag = secrets.token_hex(8)
 email = 'deployment-test-' + tag + '@example.com'
 password = secrets.token_urlsafe(32)
 course_id = None
+created_course_id = None
 
 def check(response, status=200):
     if response.status_code != status:
@@ -34,16 +38,36 @@ try:
         cookie = login.headers.get('set-cookie', '').lower()
         assert 'secure' in cookie and 'httponly' in cookie
         check(client.get('/api/v1/admin/services'), 403)
+        with SessionLocal() as db:
+            test_account = db.query(Account).filter_by(email=email).one()
+            test_account.role = 'operator'
+            db.commit()
+        for attempt in range(3):
+            services = check(client.get('/api/v1/admin/services')).json()
+            if services.get('paid_scrape_ready'):
+                break
+            time.sleep(2)
+        assert services.get('database') == 'ready', 'Database readiness failed'
+        assert services.get('scraper', {}).get('status') == 'ready', 'Private scraper binding/readiness failed'
+        assert services.get('paid_scrape_ready'), 'Live discovery configuration is not ready'
+        with SessionLocal() as db:
+            db.query(Account).filter_by(email=email).one().role = 'doctor'
+            db.commit()
         profile = {'name': 'Deployment Verified', 'city': 'Kuala Lumpur', 'state': 'Selangor', 'bio': '', 'public_enabled': False}
         check(client.patch('/api/v1/me', json=profile))
         assert check(client.get('/api/v1/me')).json()['name'] == profile['name']
         with SessionLocal() as db:
-            course = fill_course(Course(source_key='deployment-smoke-' + tag), {
-                'title': 'Temporary deployment check (fictional)', 'provider': 'Deployment test',
-                'mode': 'online', 'country': 'MY', 'start_date': date.today().isoformat(),
-                'points': 1, 'credit_label': 'CPD', 'source_url': 'https://example.com/deployment-test'}, demo=True)
-            db.add(course)
-            db.commit()
+            # Prefer an existing published course without changing it. Test records
+            # remain private and are removed with this account in finally.
+            course = db.query(Course).filter(listed_filter(), or_(Course.start_date.is_(None), Course.start_date <= date.today().isoformat())).order_by(Course.id).first()
+            if course is None:
+                course = fill_course(Course(source_key='deployment-smoke-' + tag), {
+                    'title': 'Temporary deployment check (fictional)', 'provider': 'Deployment test',
+                    'mode': 'online', 'country': 'MY', 'start_date': date.today().isoformat(),
+                    'points': 1, 'credit_label': 'CPD', 'source_url': 'https://example.com/deployment-test'}, demo=True)
+                db.add(course)
+                db.commit()
+                created_course_id = course.id
             course_id = course.id
         record = check(client.put('/api/v1/me/trainings/' + course_id, json={
             'signed_up': True, 'attended': True, 'attended_on': date.today().isoformat(),
@@ -55,7 +79,7 @@ try:
         check(client.get('/api/v1/me/certificates/' + cert['id'] + '?format=html'))
         check(client.post('/api/v1/auth/logout'))
         check(client.get('/api/v1/me'), 401)
-        print('PASS: public V1, signup/login, secure cookies, role protection, persistent profile, record, progress, CSV, certificate, logout')
+        print('PASS: dashboard, signup/login, secure cookies, role protection, private scraper readiness, persistent profile, record, progress, CSV, certificate, logout. No paid discovery run invoked.')
 finally:
     with SessionLocal() as db:
         account = db.query(Account).filter_by(email=email).first()
@@ -63,8 +87,10 @@ finally:
             for table in reversed(Base.metadata.sorted_tables):
                 if 'account_id' in table.c:
                     db.execute(table.delete().where(table.c.account_id == account.id))
-            db.delete(account)
-        if course_id:
-            db.query(Course).filter_by(id=course_id).delete()
+            # Dependants (including the eager profile) were already deleted above;
+            # a Core delete avoids ORM delete-orphan issuing a second profile delete.
+            db.execute(Account.__table__.delete().where(Account.__table__.c.id == account.id))
+        if created_course_id:
+            db.query(Course).filter_by(id=created_course_id).delete()
         db.commit()
-        print('Temporary smoke-test account and course removed.')
+        print('Temporary smoke-test account and any created fixture course removed; existing courses untouched.')

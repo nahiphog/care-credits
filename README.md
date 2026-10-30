@@ -8,13 +8,14 @@ Production: https://care-credits-hackathon.vercel.app/
 
 - `app/`, `components/`, `lib/`: Next.js frontend and same-origin API proxy.
 - `backend/routers/`: auth, doctor/catalogue, operator, internal worker and public HTTP routes.
-- `backend/services/portal.py`: application services, validation, session/origin policy and lifecycle.
-- `backend/models/schema.py`: canonical schema v17, compatible with the existing Neon database.
-- `backend/database/`: shared engine/session/metadata registry.
-- `backend/main.py` and `backend/portal_models.py`: compatibility entrypoints for existing workers and tests.
+- `backend/services/`: feature workflows; `backend/repository/`: database queries and transactions.
+- `backend/http_boundary.py`, `backend/lifecycle.py`, `backend/schemas/`: request policy, startup and HTTP validation.
+- `backend/models/`: passive domain mappings and canonical account profiles; schema v18 preserves existing columns through an additive migration.
+- `backend/database/`: shared engine/session/metadata registry and explicit migrations.
+- `backend/main.py`: FastAPI composition root. `backend/portal_models.py` retains legacy imports for existing workers and tests.
 - `scraper/`, `shared/`, `config/`: week-key discovery pipeline and contracts, including evidence validation and operator review.
 
-The previous root refactor and deployed snapshot are reconciled here. There is no separate `deployments/web` backend. See [reconciliation decisions](docs/RECONCILIATION.md).
+The previous root refactor and deployed snapshot are reconciled here. There is no separate `deployments/web` backend. See [reconciliation decisions](docs/RECONCILIATION.md) and [backend architecture and migration](docs/BACKEND_ARCHITECTURE.md).
 
 ## Local development and tests
 

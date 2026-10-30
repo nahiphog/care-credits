@@ -27,6 +27,23 @@ class ModelTests(unittest.TestCase):
             return httpx.Response(status,json={'choices':[{'message':{'content':json.dumps({'trainings':[row]})}}],'usage':{'prompt_tokens':11,'completion_tokens':19,'total_tokens':30}})
         return httpx.Client(transport=httpx.MockTransport(handler))
 
+    def test_discarded_multirow_candidates_mark_run_partial(self):
+        import json
+        usage = {}
+        response = {'choices': [{'message': {'content': json.dumps({'trainings': [self.row, {'title': 'invalid'}]})}}]}
+        with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=response))) as client:
+            rows = extract_training(self.source, client, usage=usage)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(usage['discarded_candidates'], 1)
+        self.assertIn('discarded', usage['extraction_warnings'][0])
+        def extraction(source, usage=None, **kwargs):
+            usage['extraction_warnings'] = ['One invalid candidate was discarded.']
+            return rows
+        with patch('scraper.worker.discover', return_value={'sources': [self.source], 'warnings': []}), patch('scraper.worker.extract_training', side_effect=extraction):
+            result = run_job({'query': 'GP', 'lease_token': 'test'}, lambda: None, review_only=True)
+        self.assertEqual(result['status'], 'partial')
+        self.assertTrue(any('discarded' in warning for warning in result['warnings']))
+
     def test_source_backed_output_and_unknowns(self):
         usage = {}
         with self.client(self.row) as client:

@@ -1,7 +1,8 @@
 'use client';
 
 import { ArrowRight, GraduationCap } from 'lucide-react';
-import { AuditItem, calendarYearLocal, Course, Progress, Suggestion, formatDate, locationLabel } from '@/lib/portal';
+import { AuditItem, calendarYearLocal, Course, Progress, Suggestion, formatDate, locationLabel, activityLabel } from '@/lib/portal';
+import { CertificatePanel } from '@/components/CertificatePanel';
 import { CourseCard, Empty, Loading } from '@/components/CourseList';
 
 export function OverviewPanel({
@@ -13,7 +14,7 @@ export function OverviewPanel({
   digestOptIn,
   digestBusy,
   digestFailed = false,
-  certBusy,
+  digestAvailable = false,
   loading,
   coursesLoading = false,
   coursesFailed = false,
@@ -25,7 +26,6 @@ export function OverviewPanel({
   onLearning,
   onOpen,
   onToggleDigest,
-  onIssueCertificate,
   onYear,
   onRetrySuggestions,
   onRetryAudit,
@@ -41,7 +41,7 @@ export function OverviewPanel({
   digestOptIn: boolean;
   digestBusy: boolean;
   digestFailed?: boolean;
-  certBusy: boolean;
+  digestAvailable?: boolean;
   loading: boolean;
   coursesLoading?: boolean;
   coursesFailed?: boolean;
@@ -53,7 +53,6 @@ export function OverviewPanel({
   onLearning: () => void;
   onOpen: (course: Course) => void;
   onToggleDigest: (next: boolean) => void;
-  onIssueCertificate: () => void;
   onYear?: (year: number) => void;
   onRetrySuggestions?: () => void;
   onRetryAudit?: () => void;
@@ -228,8 +227,8 @@ export function OverviewPanel({
         </section>
         <section className="panel">
           <span className="section-kicker">STAY INFORMED</span>
-          <h2>Digest and certificate</h2>
-          {digestFailed ? (
+          <h2>Email digest</h2>
+          {!digestAvailable ? <p className="small-note">Email digests are not available on this deployment. Your learning records and affiliation records remain available here.</p> : digestFailed ? (
             <p className="small-note">
               Couldn't load digest preference. Check your connection, then try again.
               {onRetryDigest ? (
@@ -259,12 +258,7 @@ export function OverviewPanel({
               </span>
             </label>
           )}
-          <p className="small-note">
-            Print a CareCredits affiliation statement for {year}. It is not an MMC, MOH, or APC certificate.
-          </p>
-          <button className="secondary" type="button" disabled={certBusy} onClick={onIssueCertificate}>
-            {certBusy ? 'Preparing…' : 'Issue printable certificate'}
-          </button>
+          <CertificatePanel year={year} />
         </section>
         <section className="panel" id="owner-audit">
           <span className="section-kicker">YOUR ACTIVITY</span>
@@ -290,7 +284,7 @@ export function OverviewPanel({
                 <ul className="source-list">
                   {audits.slice(0, 8).map((item) => (
                     <li key={item.id}>
-                      {item.action} · {item.entity_id}
+                      {activityLabel(item.action)}
                       {item.at ? ` · ${new Date(item.at * 1000).toLocaleString('en-MY')}` : ''}
                     </li>
                   ))}

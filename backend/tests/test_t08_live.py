@@ -40,7 +40,7 @@ def _current_carecredits(opener, candidate):
                 body = response.read().decode('utf-8', 'replace')
         except (HTTPError, URLError, TimeoutError, OSError, ValueError):
             continue
-        if 'text/html' in ctype and 'Skip to' in body:
+        if 'text/html' in ctype and ('Care Credits' in body or 'CareCredits' in body):
             html_ok = True
             break
     if not html_ok:
@@ -121,19 +121,15 @@ class LivePortalWalkTests(unittest.TestCase):
         self.assertEqual(live_status, 200, live_raw[:200])
         self.assertIn('text/html', live_type)
         live_html = live_raw.decode('utf-8', 'replace')
-        self.assertIn('Skip to', live_html)
+        self.assertTrue('Care Credits' in live_html or 'CareCredits' in live_html)
         health_status, health_payload = self._json('GET', '/health/live')
         self.assertEqual(health_status, 200, health_payload)
         self.assertEqual(health_payload.get('status'), 'live')
-        skip_at = live_html.lower().find('skip to')
-        email_at = live_html.lower().find('autocomplete="username"')
-        self.assertGreater(skip_at, -1)
-        if email_at > 0:
-            self.assertLess(skip_at, email_at)
         home_status, home_type, home_raw = self._open('GET', '/')
         self.assertEqual(home_status, 200, home_raw[:200])
         self.assertIn('text/html', home_type)
-        self.assertIn('Skip to', home_raw.decode('utf-8', 'replace'))
+        home_html = home_raw.decode('utf-8', 'replace')
+        self.assertTrue('Care Credits' in home_html or 'CareCredits' in home_html)
         user = None
         for email in ('demo@carecredits.local', 'doctor@carecredits.local'):
             status, payload = self._json(

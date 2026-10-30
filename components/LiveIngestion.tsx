@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import './LiveIngestion.css';
 import { CandidateCard } from '@/components/CandidateCard';
@@ -50,6 +50,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
   const [scrapeBusy, setScrapeBusy] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null);
   const [digestBusy, setDigestBusy] = useState(false);
+  const [digestAvailable, setDigestAvailable] = useState(false);
   const [digestResult, setDigestResult] = useState<{ sent: number; failed: number; day: string } | null>(null);
   const keyRef = useRef('');
   const jobsRequest = useRef(0);
@@ -116,7 +117,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       const items: Job[] = jobList.items || [];
       setJobs(items);
       const fixture = items.find((item) => isFixtureJob(item));
-      setJob((current) => current || fixture || items[0] || null);
+      setJob((current) => current ? (items.find((item) => item.id === current.id) || current) : fixture || items[0] || null);
       setJobsFailed(false);
     } catch (e) {
       if (jobsRequest.current !== requestId) return;
@@ -139,11 +140,16 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
     }
   }
 
-  useEffect(() => {
-    api('/config').then((data) => setSourceLimit(data.discovery_max_results || 1)).catch(() => {});
+  const initialize = useEffectEvent(() => {
+    api('/config').then((data) => { setSourceLimit(data.discovery_max_results || 1); setDigestAvailable(data.digest_available === true); }).catch(() => {});
     loadJobs();
     loadCandidates();
     loadTopics();
+  });
+  const invalidateLoads = useEffectEvent(() => { ++jobsRequest.current; ++candidatesRequest.current; });
+  useEffect(() => {
+    const timer = window.setTimeout(() => initialize(), 0);
+    return () => { window.clearTimeout(timer); invalidateLoads(); };
   }, []);
 
   async function refreshJobStatus(jobId = job?.id) {
@@ -153,6 +159,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       const current = await api('/admin/ingestion-jobs/' + jobId);
       if (jobPollRequest.current !== requestId) return;
       setJob(current);
+      setJobs((items) => items.map((item) => item.id === current.id ? current : item));
       setJobPollFailed(false);
       if (TERMINAL.has(current.status)) loadCandidates();
     } catch {
@@ -160,15 +167,19 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
     }
   }
 
+  const reloadCandidates = useEffectEvent(() => { void loadCandidates(); });
+  const pollStatus = useEffectEvent((id: string) => { void refreshJobStatus(id); });
   useEffect(() => {
     if (!job?.id || TERMINAL.has(job.status) || job.status === 'interrupted') {
-      if (job?.id && TERMINAL.has(job.status)) loadCandidates();
+      if (job?.id && TERMINAL.has(job.status)) {
+        const timer = window.setTimeout(() => reloadCandidates(), 0);
+        return () => window.clearTimeout(timer);
+      }
       return;
     }
     const trackedId = job.id;
-    setJobPollFailed(false);
     const timer = window.setInterval(() => {
-      refreshJobStatus(trackedId);
+      pollStatus(trackedId);
     }, 2000);
     return () => {
       window.clearInterval(timer);
@@ -223,6 +234,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       });
       keyRef.current = '';
       setJob(created);
+      setJobs((items) => [created, ...items.filter((item) => item.id !== created.id)]);
       if (created.execution_mode === 'request') {
         setJob(await api('/admin/ingestion-jobs/' + created.id + '/run', { method: 'POST' }));
       }
@@ -230,6 +242,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      await loadJobs();
       setBusy(false);
     }
   }
@@ -251,6 +264,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      await loadJobs();
       setBusy(false);
     }
   }
@@ -265,6 +279,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      await loadJobs();
       setBusy(false);
     }
   }
@@ -342,7 +357,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       <h3 className="ingestion-section-title">2. Run history</h3>
       {jobsFailed && jobs.length ? (
         <p className="empty-copy" data-testid="live-jobs-refresh-failed">
-          Couldn't refresh discovery jobs. Showing the last loaded list.{' '}
+          Couldn&apos;t refresh discovery jobs. Showing the last loaded list.{' '}
           <button className="text-link" type="button" onClick={() => loadJobs()}>
             Retry
           </button>
@@ -373,7 +388,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
         </div>
       ) : jobsFailed ? (
         <p className="empty-copy" data-testid="live-job-empty">
-          Couldn't load discovery jobs.{' '}
+          Couldn&apos;t load discovery jobs.{' '}
           <button className="text-link" type="button" onClick={() => loadJobs()}>
             Retry
           </button>
@@ -412,7 +427,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
           </details>
           {jobPollFailed ? (
             <p className="empty-copy" data-testid="live-job-poll-failed">
-              Couldn't refresh job status. Last known status is shown above.{' '}
+              Couldn&apos;t refresh job status. Last known status is shown above.{' '}
               <button className="text-link" type="button" onClick={() => refreshJobStatus()}>
                 Retry
               </button>
@@ -461,6 +476,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
               <option value="pending">Pending</option>
               <option value="held">Held</option>
               <option value="rejected">Rejected</option>
+              <option value="published">Published — review corrections</option>
               <option value="pending,held,rejected">All reviewable</option>
             </select>
           </label>
@@ -486,7 +502,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
         </div>
         {candidatesFailed && candidates.length ? (
           <p className="empty-copy" data-testid="live-candidates-refresh-failed">
-            Couldn't refresh review candidates. Showing the last loaded list.{' '}
+            Couldn&apos;t refresh review candidates. Showing the last loaded list.{' '}
             <button className="text-link" type="button" onClick={() => loadCandidates(candidatePage)}>
               Retry
             </button>
@@ -579,7 +595,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
         {sourceLimit === 1 && <p className="ingestion-hint">Scheduled batch discovery is disabled on this deployment. Use the single-source discovery form above.</p>}
       {topicsFailed && topics.length ? (
         <p className="empty-copy" data-testid="live-scrape-topics-stale">
-          Couldn't refresh curated daily topics. Showing the last loaded list.{' '}
+          Couldn&apos;t refresh curated daily topics. Showing the last loaded list.{' '}
           <button className="text-link" type="button" onClick={() => loadTopics()}>
             Retry
           </button>
@@ -587,7 +603,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
       ) : null}
       {topicsFailed && !topics.length ? (
         <p className="empty-copy" data-testid="live-scrape-topics-failed">
-          Couldn't load curated daily topics. Check your connection, then try again.{' '}
+          Couldn&apos;t load curated daily topics. Check your connection, then try again.{' '}
           <button className="text-link" type="button" onClick={() => loadTopics()}>
             Retry
           </button>
@@ -623,7 +639,7 @@ export function LiveIngestion({ onPublished }: { onPublished?: () => void }) {
           </p>
         ) : null}
       </div>
-      <div className="empty-copy" data-testid="live-digest-run">
+      <div className="empty-copy" data-testid="live-digest-run" hidden={!digestAvailable}>
         <button className="secondary" type="button" disabled={digestBusy} onClick={runDigests}>
           {digestBusy ? 'Sending…' : 'Send due digests'}
         </button>

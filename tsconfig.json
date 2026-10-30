@@ -37,15 +37,14 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    ".data/next-dev-3000/types/**/*.ts",
-    ".data/next-dev-3000/dev/types/**/*.ts",
-    ".data/next-dev-3010/types/**/*.ts",
-    ".data/next-dev-3010/dev/types/**/*.ts"
+    "**/*.mts"
   ],
   "exclude": [
     "node_modules",
     "examples",
-    "frontend"
+    "frontend",
+    "work",
+    "deployments",
+    "outputs"
   ]
 }

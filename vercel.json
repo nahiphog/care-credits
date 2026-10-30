@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["sin1"],
+  "crons": [{"path": "/api/maintenance", "schedule": "0 20 * * *"}],
   "services": {
     "frontend": {
       "root": ".",
@@ -12,7 +13,13 @@
     "backend": {
       "root": ".",
       "framework": "fastapi",
-      "entrypoint": "backend.vercel_app:app"
+      "entrypoint": "backend.vercel_app:app",
+      "bindings": [{"type": "service", "service": "scraper", "format": "url", "env": "SCRAPER_SERVICE_URL"}]
+    },
+    "scraper": {
+      "root": ".",
+      "framework": "fastapi",
+      "entrypoint": "scraper.service:app"
     }
   },
   "rewrites": [{"source": "/(.*)", "destination": {"service": "frontend"}}]

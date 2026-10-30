@@ -1,5 +1,7 @@
 # Backend reconciliation
 
+Historical record of the initial compatibility reconciliation. The subsequent architecture work adopts feature services/repositories and the additive schema-18 account-profile migration. See [current backend architecture and migration](BACKEND_ARCHITECTURE.md) for the active design; the single-service, schema-v17 and no-migration decisions below describe the earlier stage.
+
 Based on dman1313/CareCredits main b7e8765 and deployed nahiphog/care-credits 27350e5.
 
 The refactor imported Candidate, DigestPreference and SCHEMA_VERSION from modules that did not define them, while security still imported the removed portal_models module. Its account model omitted name, role and session/profile fields required by the live API; its course model omitted persisted data/evidence fields. Enabling it directly against production would break sessions and catalogue operations.

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-FRONTEND = ROOT / 'frontend'
+FRONTEND = ROOT
 
 
 class SecretSurfaceTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class SecretSurfaceTests(unittest.TestCase):
             'GOOGLE_CLIENT_SECRET',
         )
         hits = []
-        for path in FRONTEND.rglob('*'):
+        for path in (item for folder in ('app', 'components', 'lib') for item in (FRONTEND / folder).rglob('*')):
             if not path.is_file() or any(part in path.parts for part in ('node_modules', '.next', 'dist', '.data')):
                 continue
             if path.suffix.lower() not in {'.ts', '.tsx', '.js', '.jsx', '.json', '.env', '.md'}:
@@ -31,7 +31,7 @@ class SecretSurfaceTests(unittest.TestCase):
         self.assertEqual(hits, [])
 
     def test_default_origins_are_local_only(self):
-        from main import DEFAULT_ALLOWED_ORIGINS
+        from http_boundary import DEFAULT_ALLOWED_ORIGINS
         default = DEFAULT_ALLOWED_ORIGINS
         self.assertNotIn('*', default)
         self.assertTrue(all(item.startswith('http://localhost') or item.startswith('http://127.0.0.1') for item in default.split(',')))
@@ -39,7 +39,7 @@ class SecretSurfaceTests(unittest.TestCase):
         self.assertIn('http://127.0.0.1:3021', default)
         self.assertIn('http://127.0.0.1:3030', default)
         self.assertIn('http://127.0.0.1:3040', default)
-        main = (ROOT / 'backend' / 'services' / 'portal.py').read_text(encoding='utf-8')
+        main = (ROOT / 'backend' / 'http_boundary.py').read_text(encoding='utf-8')
         compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
         sample = (ROOT / '.env.sample').read_text(encoding='utf-8')
         self.assertIn('http://127.0.0.1:3020', main)
@@ -61,7 +61,9 @@ class SecretSurfaceTests(unittest.TestCase):
         self.assertNotIn('BACKEND_INTERNAL_URL=http', sample)
 
     def test_built_frontend_assets_omit_service_secret_names(self):
-        trees = [FRONTEND / '.next', FRONTEND / '.data']
+        # Only browser-delivered bundles: server chunks legitimately reference private env names.
+        trees = [folder / 'static' for folder in FRONTEND.glob('.next*') if folder.is_dir()]
+        trees.append(FRONTEND / 'dist' / 'client')
         existing = [tree for tree in trees if tree.exists()]
         if not existing:
             self.skipTest('No built frontend assets in this checkout')
@@ -96,8 +98,13 @@ class SecretSurfaceTests(unittest.TestCase):
         skip_parts = {'.git', '.venv', 'node_modules', '.next', '.data', 'dist', '__pycache__'}
         allow = {'tvly-test-only'}
         hits = []
-        for path in ROOT.rglob('*'):
-            if not path.is_file() or any(part in skip_parts for part in path.parts):
+        def source_files():
+            for directory, folders, files in os.walk(ROOT):
+                folders[:] = [name for name in folders if name not in skip_parts]
+                for name in files:
+                    yield Path(directory) / name
+        for path in source_files():
+            if not path.is_file():
                 continue
             if path.name.startswith('.env') or path.suffix.lower() in {'.db', '.pem', '.key'}:
                 continue

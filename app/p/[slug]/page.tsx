@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { BookOpen, ExternalLink, Printer } from 'lucide-react';
 import { Brand } from '@/components/Brand';
-import { api, publicWebUrl } from '@/lib/portal';
+import { api, ApiError, publicWebUrl } from '@/lib/portal';
 
 type PublicData = {
   name: string;
@@ -17,16 +17,23 @@ export default function PublicProfile() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<PublicData | null>(null);
   const [error, setError] = useState('');
+  const [unavailable, setUnavailable] = useState(false);
+  const request = useRef(0);
 
   function load() {
+    const current = ++request.current;
     setError('');
     setData(null);
     api('/public/' + encodeURIComponent(slug))
-      .then(setData)
-      .catch((e) => setError((e as Error).message || 'This training profile is private or unavailable.'));
+      .then((result) => { if (current === request.current) setData(result); })
+      .catch((e) => {
+        if (current !== request.current) return;
+        setUnavailable(e instanceof ApiError && (e.status === 404 || e.status === 403));
+        setError((e as Error).message || 'Unable to load this training profile. Please try again.');
+      });
   }
 
-  useEffect(load, [slug]);
+  useEffect(() => { load(); return () => { ++request.current; }; }, [slug]);
 
   return (
     <main id="main-content" className="public-page">
@@ -35,7 +42,7 @@ export default function PublicProfile() {
       </a>
       {error ? (
         <div className="empty-state">
-          <h1>Private by choice.</h1>
+          <h1>{unavailable ? 'Profile not available' : 'Could not load this profile'}</h1>
           <p>{error}</p>
           <button className="text-btn" type="button" onClick={load}>
             Retry

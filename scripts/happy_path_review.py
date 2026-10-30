@@ -21,7 +21,9 @@ os.environ.setdefault('ALLOW_SIGNUP', 'true')
 os.environ.setdefault('SCRAPER_SERVICE_TOKEN', 'happy-path-local-token')
 
 from fastapi.testclient import TestClient
-from main import app, initialize, source_key
+from main import app
+from lifecycle import initialize
+from catalogue import source_key
 from database import SessionLocal
 from portal_models import Account, Candidate, Course, FieldEvidence, Job, Record
 from shared.contracts import Training

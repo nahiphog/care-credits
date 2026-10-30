@@ -272,20 +272,46 @@ export function calendarYearLocal() {
   return Number(todayLocal().slice(0, 4));
 }
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) { super(message); this.name = 'ApiError'; }
+}
+
+export function activityLabel(action: string) {
+  const labels: Record<string, string> = {
+    training_record_changed: 'Learning record updated', profile_updated: 'Profile updated',
+    certificate_issued: 'Affiliation record issued', digest_updated: 'Email preference updated',
+    candidate_published: 'Course published', candidate_held: 'Course held for review',
+    candidate_rejected: 'Course rejected', session_cancelled: 'Course cancelled',
+  };
+  return labels[action] || action.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
 export async function api(path: string, options: RequestInit = {}) {
-  const response = await fetch('/api/v1' + path, {
-    ...options,
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Care-Client': '1',
-      ...options.headers,
-    },
-  });
+  const timeout = AbortSignal.timeout(/\/ingestion-jobs\/[^/]+\/run(?:\?|$)/.test(path) ? 250_000 : 35_000);
+  let response: Response;
+  try {
+    response = await fetch('/api/v1' + path, {
+      ...options,
+      cache: 'no-store',
+      signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Care-Client': '1',
+        'X-Care-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...options.headers,
+      },
+    });
+  } catch (error) {
+    if (timeout.aborted) throw new ApiError('The request timed out. Refresh to check whether your change completed before trying again.', 408);
+    throw error;
+  }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const message = data?.error?.message || (typeof data.detail === 'string' ? data.detail : '');
-    throw new Error(message || 'Please check your entries and try again.');
+    if (response.status === 401 && !path.startsWith('/auth/') && !path.startsWith('/public/') && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('carecredits:session-expired'));
+    }
+    throw new ApiError(message || (response.status >= 500 ? 'CareCredits is temporarily unavailable. Please try again.' : 'Please check your entries and try again.'), response.status);
   }
   return response.json();
 }

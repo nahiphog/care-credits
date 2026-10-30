@@ -1,6 +1,8 @@
 import os
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
+from schemas.discovery import CompleteJob
 from backend.tests.test_portal import PortalTests
 
 
@@ -22,12 +24,16 @@ class ServerlessTests(unittest.TestCase):
             self.assertEqual(self.client.post('/api/v1/admin/ingestion-jobs/x/run').status_code, 403)
 
     def test_completed_job_is_not_executed_twice(self):
-        def fake_run(job, heartbeat, *, review_only=False):
-            self.assertTrue(review_only)
-            heartbeat()
-            return {'lease_token': job['lease_token'], 'status': 'succeeded',
-                    'candidates': [], 'sources': [], 'warnings': [], 'usage': {}}
-        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('scraper.worker.run_job', side_effect=fake_run) as run:
+        def fake_run(job):
+            from backend.tests.test_portal import Job
+            from shared.discovery_limits import SCRAPER_REQUEST_TIMEOUT_SECONDS
+            with self.Session() as db:
+                stored = db.get(Job, job['id'])
+                self.assertEqual(stored.lease_until, job['expires_at'])
+                self.assertEqual(stored.lease_until - stored.started_at, 240)
+                self.assertGreater(stored.lease_until - stored.started_at, SCRAPER_REQUEST_TIMEOUT_SECONDS)
+            return SimpleNamespace(**CompleteJob(lease_token=job['lease_token'], status='succeeded', candidates=[], sources=[], warnings=[], usage={}).model_dump(mode='json'))
+        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('services.ingestion_job_service.execute_scraper', side_effect=fake_run) as run:
             created = self.create()
             self.assertEqual(created.status_code, 202, created.text)
             job = created.json()
@@ -42,7 +48,7 @@ class ServerlessTests(unittest.TestCase):
     def test_running_job_cannot_be_claimed_again(self):
         from backend.tests.test_portal import Job
         import time
-        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('scraper.worker.run_job') as run:
+        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('services.ingestion_job_service.execute_scraper') as run:
             job_id = self.create().json()['id']
             with self.Session() as db:
                 job = db.get(Job, job_id)
@@ -58,7 +64,10 @@ class ServerlessTests(unittest.TestCase):
         from backend.tests.test_portal import Candidate, Course, sample
         training = sample('Review-only course')
         source = {'url': training['source_url'], 'raw_content': training['source_text']}
-        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch(
+        def remote_execute(job):
+            from scraper.worker import run_job
+            return SimpleNamespace(**CompleteJob(**run_job(job, lambda: None, review_only=True)).model_dump(mode='json'))
+        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('services.ingestion_job_service.execute_scraper', side_effect=remote_execute), patch(
             'scraper.worker.configuration'
         ), patch('scraper.worker.firehose_configured', return_value=False), patch(
             'scraper.worker.discover', return_value={'sources': [source], 'warnings': []}
@@ -74,5 +83,5 @@ class ServerlessTests(unittest.TestCase):
             self.assertEqual(db.query(Course).filter_by(title='Review-only course').count(), 0)
 
     def test_missing_credentials_block_before_job_creation(self):
-        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('main._scraper_service_status', return_value={}):
+        with patch.dict(os.environ, {'SERVERLESS_MODE': 'true'}), patch('services.discovery_status_service._scraper_service_status', return_value={}):
             self.assertEqual(self.create().status_code, 409)
