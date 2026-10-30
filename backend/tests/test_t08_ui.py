@@ -1,5 +1,6 @@
 """T-08 source-level checks for keyboard, loading, empty, error, and retry UI."""
 import unittest
+from html import unescape
 from pathlib import Path
 
 FRONTEND = Path(__file__).resolve().parents[2]
@@ -7,7 +8,7 @@ FRONTEND = Path(__file__).resolve().parents[2]
 
 class PortalAccessibilityTests(unittest.TestCase):
     def _read(self, relative):
-        return (FRONTEND / relative).read_text(encoding='utf-8')
+        return unescape((FRONTEND / relative).read_text(encoding='utf-8'))
 
     def test_sign_in_search_and_detail_are_labelled(self):
         login = self._read('components/LoginForm.tsx')
@@ -431,7 +432,7 @@ class PortalAccessibilityTests(unittest.TestCase):
         self.assertIn("learningBusy\n                          ? 'Loading your records…'", live)
         self.assertIn('live-learning-pager', live)
         self.assertIn('live-learning-stale', live)
-        self.assertIn('Couldn&apos;t refresh your records. Showing the last loaded list.', live)
+        self.assertIn('Couldn\'t refresh your records. Showing the last loaded list.', live)
         # UI-01: Retry re-issues failed My learning filter/page (parity with pendingSearch / `/` pendingLearning).
         self.assertIn('pendingLearning', live)
         self.assertIn('retryLearning', live)
@@ -490,7 +491,7 @@ class PortalAccessibilityTests(unittest.TestCase):
         self.assertIn('progressBusy', overview)
         self.assertIn('progressFailed', overview)
         self.assertIn('onRetryProgress', overview)
-        self.assertIn('Couldn&apos;t load progress', overview)
+        self.assertIn('Couldn\'t load progress', overview)
         self.assertIn('overview-progress-failed', overview)
         self.assertIn('progressFailed={progressFailed}', page)
         self.assertIn('setProgressFailed', page)
