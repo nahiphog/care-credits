@@ -42,5 +42,17 @@ next-env.d.ts
 /.sites-runtime/
 /.agents/
 /.codex/
+/.venv/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+*.db
+/.data/
+/frontend/
+!.env.sample
 /outputs/
 /work/
+/skills-lock.json
+
+# Removed staging snapshot (local build artifacts may remain).
+/deployments/

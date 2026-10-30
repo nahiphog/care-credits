@@ -1,0 +1,97 @@
+# Paid resources: review Render's cost summary before applying.
+services:
+  - type: web
+    name: care-credits-web
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    branch: codex/v1-integrated-demo
+    dockerfilePath: ./Dockerfile.demo
+    dockerCommand: sh -c 'export BACKEND_URL="http://$BACKEND_HOSTPORT"; exec node server.js'
+    healthCheckPath: /health/live
+    envVars:
+      - key: BACKEND_HOSTPORT
+        fromService:
+          name: care-credits-api
+          type: pserv
+          property: hostport
+  - type: pserv
+    name: care-credits-api
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    branch: codex/v1-integrated-demo
+    dockerfilePath: ./backend/Dockerfile
+    dockerCommand: sh -c 'export ALLOWED_ORIGINS="$PUBLIC_FRONTEND_BASE"; export PUBLIC_API_BASE="$PUBLIC_FRONTEND_BASE"; export SCRAPER_HEALTH_URL="http://$SCRAPER_HOSTPORT"; exec uvicorn main:app --host 0.0.0.0 --port 8000'
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: APP_ENV
+        value: production
+      - key: DEMO_MODE
+        value: "false"
+      - key: ALLOW_SIGNUP
+        value: "true"
+      - key: DAILY_SCRAPE_ENABLED
+        value: "false"
+      - key: DIGEST_ENABLED
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: care-credits-db
+          property: connectionString
+      - key: PUBLIC_FRONTEND_BASE
+        sync: false
+      - key: SCRAPER_SERVICE_TOKEN
+        generateValue: true
+      - key: SCRAPER_HOSTPORT
+        fromService:
+          name: care-credits-scraper
+          type: pserv
+          property: hostport
+  - type: pserv
+    name: care-credits-scraper
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    branch: codex/v1-integrated-demo
+    dockerfilePath: ./scraper/Dockerfile
+    dockerCommand: sh -c 'export BACKEND_INTERNAL_URL="http://$BACKEND_HOSTPORT"; exec python -m scraper.worker'
+    envVars:
+      - key: PORT
+        value: "8002"
+      - key: SCRAPER_HEALTH_HOST
+        value: 0.0.0.0
+      - key: SCRAPER_HEALTH_PORT
+        value: "8002"
+      - key: BACKEND_HOSTPORT
+        fromService:
+          name: care-credits-api
+          type: pserv
+          property: hostport
+      - key: SCRAPER_SERVICE_TOKEN
+        fromService:
+          name: care-credits-api
+          type: pserv
+          envVarKey: SCRAPER_SERVICE_TOKEN
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: MODEL_API_KEY
+        sync: false
+      - key: MODEL_BASE_URL
+        sync: false
+      - key: MODEL_ID
+        sync: false
+      - key: MODEL_WEIGHTS_URL
+        sync: false
+      - key: MODEL_LICENSE_URL
+        sync: false
+      - key: MODEL_OPEN_WEIGHT_CONFIRMED
+        value: "false"
+databases:
+  - name: care-credits-db
+    region: singapore
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    storageAutoscalingEnabled: false
+    ipAllowList: []
