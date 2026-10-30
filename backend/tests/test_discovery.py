@@ -54,6 +54,21 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(result['retrieved_at'])
         self.assertNotIn('test-only', json.dumps(result))
 
+    def test_direct_course_url_skips_search(self):
+        url='https://example.org/courses/work-related'
+        with patch.object(d,'tavily_post',return_value={'results':[{'url':url,'raw_content':'Course detail'}]}) as call:
+            result=d.discover(url,1)
+        call.assert_called_once()
+        self.assertEqual(call.call_args.args[0],'extract')
+        self.assertEqual(result['sources'][0]['url'],url)
+        with patch.object(d,'tavily_post') as call:
+            with self.assertRaises(HTTPException): d.discover('https://127.0.0.1/course',1)
+        call.assert_not_called()
+
+    def test_reference_style_link_is_matched_by_its_url(self):
+        source={'url':'https://example.org/modules','raw_content':'[Work related][1]\n[1]: https://example.org/courses/work-related'}
+        self.assertEqual(d.matching_detail_link(source,'work related')[0],'https://example.org/courses/work-related')
+
     def test_directory_follows_one_matching_same_site_detail(self):
         listing='https://example.org/modules'
         detail='https://example.org/courses/work-related-musculoskeletal-disorders/'

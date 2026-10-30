@@ -48,12 +48,19 @@ query-matching course-detail link on the same hostname, with at most one additio
 Tavily extraction per job and no recursive crawling. It replaces the directory as
 the model source; a failed fetch retains the directory and reports the failure.
 This can consume additional provider credits within the existing daily run limit.
+Pasting a public course URL into discovery skips search and extracts that page
+directly. Private addresses and credential-bearing URLs are rejected. This also
+works when a directory's extracted content does not retain usable detail links.
 
 Extraction warnings distinguish HTTP/network errors, truncated output, invalid JSON,
 empty model results, schema fields and evidence failures. They never include raw
 model values, response bodies or credentials. Optional null descriptions become
 empty text; missing provider or mode still rejects the record. Model instructions
 distinguish publication dates from course dates and accreditors from providers.
+When an identity quotation is misselected, it can be replaced only by a literal,
+word-bounded match of the unchanged title/provider in the fetched source (ignoring
+case and whitespace). Invented names remain rejected; normal evidence validation
+still runs on the corrected record.
 
 `scripts/verify_live_discovery.py` is an opt-in, one-run live check scoped to the
 existing production origin. It creates a temporary test identity, retains the run

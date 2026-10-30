@@ -81,8 +81,11 @@ def matching_detail_link(source, query):
         return None
     words = set(re.findall(r'[a-z0-9]{4,}', query.casefold())) - {
         'https', 'http', 'course', 'courses', 'medical', 'malaysia', 'online', 'training', 'www'}
-    matches = []
-    for label, href in re.findall(r'\[([^\]\n]{1,500})\]\(([^\s)]+)\)', (source.get('raw_content') or '')[:50000]):
+    matches = {}
+    content = (source.get('raw_content') or '')[:50000]
+    links = re.findall(r'\[([^\]\n]{1,500})\]\(([^\s)]+)\)', content)
+    links += [(href, href) for href in re.findall(r'https?://[^\s<>"\])]+', content)]
+    for label, href in links:
         try:
             url = source_url(urljoin(source['url'], href))
         except ValueError:
@@ -91,11 +94,11 @@ def matching_detail_link(source, query):
             continue
         score = len(words & set(re.findall(r'[a-z0-9]{4,}', (label + ' ' + urlsplit(url).path).casefold())))
         if score >= 2:
-            matches.append((score, url, label))
+            matches[url] = max(matches.get(url, (0, url, label)), (score, url, label))
     if not matches:
         return None
     # Ambiguous equal matches should not silently select a different course.
-    matches = sorted(set(matches), reverse=True)
+    matches = sorted(matches.values(), reverse=True)
     if len(matches) > 1 and matches[0][0] == matches[1][0] and matches[0][1] != matches[1][1]:
         return None
     return matches[0][1:]
@@ -105,7 +108,10 @@ def discover(query, max_results=5):
     key = os.getenv("TAVILY_API_KEY", "").strip()
     if not key:
         raise ProviderError(503, "Tavily is not configured. Run python scripts/setup_integrations.py locally.")
-    search = tavily_post("search", {
+    direct = source_url(query.strip()) if query.strip().startswith(('https://', 'http://')) else None
+    if query.strip().startswith(('https://', 'http://')) and not direct:
+        raise ProviderError(422, 'Supply a public course URL without credentials or a private address.')
+    search = {'results': [{'url': direct, 'title': 'Course source'}]} if direct else tavily_post("search", {
         "query": "Malaysia medical CPD courses conferences webinars " + query,
         "topic": "general", "search_depth": "basic", "max_results": max_results,
         "include_answer": False, "include_raw_content": False,

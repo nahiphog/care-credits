@@ -34,6 +34,25 @@ def validation_diagnostic(exc):
     return 'evidence_invalid: record failed source validation'
 
 
+def align_identity_evidence(row, source_text):
+    """Repair a misselected quote only when the literal claim exists in the source.
+
+    Never change the claimed identity or substitute a guessed provider. All usual
+    schema and evidence validation still runs after this narrow correction.
+    """
+    evidence = row.get('evidence')
+    if not isinstance(evidence, dict):
+        return
+    for field in ('title', 'provider'):
+        value = row.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value) > 200:
+            continue
+        pattern = r'(?<!\w)' + r'\s+'.join(re.escape(part) for part in value.split()) + r'(?!\w)'
+        match = re.search(pattern, source_text, re.I)
+        if match:
+            evidence[field] = match.group()
+
+
 # Zero-width / BiDi / BOM characters a page can hide inside otherwise clean text. Scrapling-style
 # sanitization strips them before any LLM prompt so hidden prompt-injection payloads cannot ride in.
 _HIDDEN_CHARS_RE = re.compile('[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad\u202a-\u202e]')
@@ -705,6 +724,7 @@ def extract_training(source, client=None, usage=None):
             # Missing optional prose is absence, not a reason to discard evidenced identity.
             if row.get('description') is None:
                 row['description'] = ''
+            align_identity_evidence(row, source_text_full)
             row.update(
                 source_url=source['url'],
                 source_text=source_text_full,

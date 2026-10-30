@@ -27,6 +27,15 @@ class ModelTests(unittest.TestCase):
             return httpx.Response(status,json={'choices':[{'message':{'content':json.dumps({'trainings':[row]})}}],'usage':{'prompt_tokens':11,'completion_tokens':19,'total_tokens':30}})
         return httpx.Client(transport=httpx.MockTransport(handler))
 
+    def test_identity_quote_realignment_requires_literal_source_support(self):
+        row={**self.row,'evidence':{**self.row['evidence'],'provider':'Primary care seminar'}}
+        with self.client(row) as client:
+            result=extract_training(self.source,client)
+        self.assertEqual(result[0]['provider'],'Medical School')
+        self.assertEqual(result[0]['evidence']['provider'],'Medical School')
+        with self.client({**row,'provider':'Invented Medical School'}) as client:
+            with self.assertRaises(ExtractionError): extract_training(self.source,client)
+
     def test_null_optional_description_does_not_discard_valid_identity(self):
         with self.client({**self.row, 'description': None}) as client:
             rows=extract_training(self.source,client)
