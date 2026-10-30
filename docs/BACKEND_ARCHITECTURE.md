@@ -16,7 +16,7 @@ The request path is:
 - `backend/database/` owns connection/session setup and explicit schema migrations. A readiness request verifies schema compatibility; it never silently migrates production.
 - `backend/domain/` contains shared application rules and errors without HTTP or database ownership.
 
-`portal_models.py`, `schedule.py`, `catalogue.py` and the deprecated discovery-service facade retain selected old imports for scripts/tests. Active feature paths import their canonical service/repository directly. The old large portal service is not the application entrypoint.
+`portal_models.py`, `schedule.py`, `catalogue.py` and the certificate/digest/OAuth compatibility modules retain selected old imports for scripts/tests. Active feature paths import their canonical service/repository directly. The old large portal service and discovery facade have been removed.
 
 ## Discovery and catalogue domains
 
