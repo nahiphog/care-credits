@@ -124,7 +124,7 @@ class DemoReadinessStackTests(unittest.TestCase):
     def test_cli_reports_offline_fixture_path_without_paid_calls(self):
         root = Path(__file__).resolve().parents[2]
         self.assertTrue((root / 'backend' / 'seed_demo.py').is_file())
-        self.assertTrue((root / 'frontend' / 'app' / 'live' / 'page.tsx').is_file())
+        self.assertTrue((root / 'app' / 'live' / 'page.tsx').is_file())
         source = (root / 'scripts' / 'demo_readiness.py').read_text(encoding='utf-8')
         self.assertIn('fixture seed module', source)
         self.assertIn('/live demo shell', source)

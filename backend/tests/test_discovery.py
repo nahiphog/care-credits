@@ -129,7 +129,8 @@ class DiscoveryTests(unittest.TestCase):
                 self.assertIn('DB_NAME=keep', first)
                 self.assertIn('TAVILY_API_KEY=tvly-test-only', first)
                 self.assertNotIn('tvly-test-only', output.getvalue())
-                self.assertEqual((root / '.env').stat().st_mode & 0o777, 0o600)
+                if os.name != 'nt':  # Windows uses inherited ACLs, not POSIX mode bits.
+                    self.assertEqual((root / '.env').stat().st_mode & 0o777, 0o600)
 
     def test_setup_integrations_records_model_identity(self):
         sample = (
@@ -168,7 +169,8 @@ class DiscoveryTests(unittest.TestCase):
             self.assertIn('MODEL_MAX_OUTPUT_TOKENS=4000', saved)
             self.assertIn('MODEL_API_KEY=sk-test-only', saved)
             self.assertNotIn('sk-test-only', output.getvalue())
-            self.assertEqual((root / '.env').stat().st_mode & 0o777, 0o600)
+            if os.name != 'nt':  # Windows uses inherited ACLs, not POSIX mode bits.
+                self.assertEqual((root / '.env').stat().st_mode & 0o777, 0o600)
 
     def test_setup_integrations_leaves_open03_identity_blank(self):
         sample = (

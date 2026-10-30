@@ -39,7 +39,7 @@ class SecretSurfaceTests(unittest.TestCase):
         self.assertIn('http://127.0.0.1:3021', default)
         self.assertIn('http://127.0.0.1:3030', default)
         self.assertIn('http://127.0.0.1:3040', default)
-        main = (ROOT / 'backend' / 'main.py').read_text(encoding='utf-8')
+        main = (ROOT / 'backend' / 'services' / 'portal.py').read_text(encoding='utf-8')
         compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
         sample = (ROOT / '.env.sample').read_text(encoding='utf-8')
         self.assertIn('http://127.0.0.1:3020', main)

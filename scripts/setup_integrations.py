@@ -56,7 +56,9 @@ def main():
             content+='\n'+key+'='+value+'\n'
     fd=os.open(destination,os.O_CREAT|os.O_TRUNC|os.O_WRONLY,0o600)
     with os.fdopen(fd,'w') as f:
-        os.fchmod(f.fileno(),0o600);f.write(content)
+        if hasattr(os, 'fchmod'):
+            os.fchmod(f.fileno(), 0o600)
+        f.write(content)
     print('Saved .env privately. Restart services. No live calls have been made.')
 
 

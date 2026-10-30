@@ -86,7 +86,7 @@ class DevPortTests(unittest.TestCase):
         self.assertEqual(scraper['BACKEND_INTERNAL_URL'], 'http://127.0.0.1:8000')
         self.assertNotIn('TYPESAFE_API_KEY', scraper)
         self.assertEqual(frontend['BACKEND_URL'], 'http://127.0.0.1:8000')
-        self.assertEqual(frontend['NEXT_DIST_DIR'], str(root / 'frontend' / '.data' / 'next-dev-3000'))
+        self.assertEqual(frontend['NEXT_DIST_DIR'], '.data/next-dev-3000')
         self.assertEqual(frontend['WATCHPACK_POLLING'], 'true')
         self.assertEqual(frontend['CHOKIDAR_USEPOLLING'], 'true')
         self.assertNotIn('MODEL_API_KEY', frontend)
@@ -94,7 +94,7 @@ class DevPortTests(unittest.TestCase):
         self.assertIn('http://127.0.0.1:3030', backend['ALLOWED_ORIGINS'])
         self.assertIn('http://127.0.0.1:3040', backend['ALLOWED_ORIGINS'])
         filled = apply_provisional_model({'MODEL_ID': '', 'TAVILY_API_KEY': 'keep'})
-        self.assertEqual(filled['MODEL_ID'], 'Qwen/Qwen3-30B-A3B-Instruct-2507')
+        self.assertEqual(filled['MODEL_ID'], 'nvidia/nemotron-3-super-120b-a12b')
         self.assertEqual(filled['TAVILY_API_KEY'], 'keep')
         self.assertNotIn('MODEL_API_KEY', filled)
         self.assertTrue(using_provisional('MODEL_ID', {'MODEL_ID': ''}))
@@ -120,7 +120,7 @@ class DevPortTests(unittest.TestCase):
         self.assertNotIn('MODEL_LICENSE_URL', backend_empty)
         self.assertNotIn('MODEL_MAX_INPUT_CHARS', backend_empty)
         self.assertNotIn('MODEL_MAX_OUTPUT_TOKENS', backend_empty)
-        self.assertEqual(scraper_filled['MODEL_ID'], 'Qwen/Qwen3-30B-A3B-Instruct-2507')
+        self.assertEqual(scraper_filled['MODEL_ID'], 'nvidia/nemotron-3-super-120b-a12b')
         self.assertIn('http://localhost:3010', backend_empty['ALLOWED_ORIGINS'])
         self.assertIn('http://localhost:3030', backend_empty['ALLOWED_ORIGINS'])
         from main import DEFAULT_ALLOWED_ORIGINS
@@ -150,4 +150,3 @@ class DevPortTests(unittest.TestCase):
             server.server_close()
         self.assertEqual(ready, ['scraper'])
         self.assertEqual(missing, ['missing'])
-

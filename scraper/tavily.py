@@ -127,5 +127,3 @@ def discover(query, max_results=5):
         "sources": list(sources.values()), "warnings": warnings,
         "usage": {"tavily_credits": sum(known) if known else None},
     }
-
-

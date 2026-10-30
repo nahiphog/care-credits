@@ -9,6 +9,7 @@
 frontend
 outputs
 work
+deployments
 __pycache__
 *.db
 *.pyc

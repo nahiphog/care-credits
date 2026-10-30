@@ -2254,7 +2254,7 @@ class PortalTests(unittest.TestCase):
 
     def test_public_config_is_login_flags_only(self):
         body = self.client.get('/api/v1/config').json()
-        self.assertEqual(set(body), {'demo', 'signup_enabled', 'oauth_google'})
+        self.assertEqual(set(body), {'demo', 'signup_enabled', 'oauth_google', 'discovery_max_results'})
 
     def test_publish_stores_source_review_and_field_evidence(self):
         from portal_models import FieldEvidence

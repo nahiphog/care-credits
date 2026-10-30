@@ -53,3 +53,6 @@ __pycache__/
 /outputs/
 /work/
 /skills-lock.json
+
+# Removed staging snapshot (local build artifacts may remain).
+/deployments/

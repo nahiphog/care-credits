@@ -6,14 +6,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ENVELOPE = ROOT / 'frontend' / 'lib' / 'apiEnvelope.ts'
+ENVELOPE = ROOT / 'lib' / 'apiEnvelope.ts'
 
 
 class FrontendApiEnvelopeTests(unittest.TestCase):
     def test_api_envelope_helpers_return_sdd_shape(self):
         self.assertTrue(ENVELOPE.is_file())
         script = f"""
-import {{ notFoundBody, unavailableBody, apiErrorBody, envelopeHeaders, JSON_CONTENT_TYPE }} from {json.dumps(str(ENVELOPE))};
+import {{ notFoundBody, unavailableBody, apiErrorBody, envelopeHeaders, JSON_CONTENT_TYPE }} from {json.dumps(ENVELOPE.as_uri())};
 const a = notFoundBody('rid-404');
 const b = unavailableBody('rid-503');
 const c = apiErrorBody('forbidden', 'Nope.', 'rid-403');
@@ -26,7 +26,7 @@ console.log(JSON.stringify({{ ok: true, keys: Object.keys(a.error).sort() }}));
 """
         result = subprocess.run(
             ['node', '--experimental-strip-types', '--input-type=module', '-e', script],
-            cwd=str(ROOT / 'frontend'),
+            cwd=str(ROOT),
             capture_output=True,
             text=True,
             check=False,
@@ -37,10 +37,10 @@ console.log(JSON.stringify({{ ok: true, keys: Object.keys(a.error).sort() }}));
         self.assertEqual(payload['keys'], ['code', 'message', 'request_id'])
 
     def test_api_routes_use_shared_envelope_helpers(self):
-        unmatched = (ROOT / 'frontend' / 'app' / 'api' / '[...path]' / 'route.ts').read_text(encoding='utf-8')
-        empty_v1 = (ROOT / 'frontend' / 'app' / 'api' / 'v1' / 'route.ts').read_text(encoding='utf-8')
-        proxy = (ROOT / 'frontend' / 'app' / 'api' / 'v1' / '[...path]' / 'route.ts').read_text(encoding='utf-8')
-        ready = (ROOT / 'frontend' / 'app' / 'health' / 'ready' / 'route.ts').read_text(encoding='utf-8')
+        unmatched = (ROOT / 'app' / 'api' / '[...path]' / 'route.ts').read_text(encoding='utf-8')
+        empty_v1 = (ROOT / 'app' / 'api' / 'v1' / 'route.ts').read_text(encoding='utf-8')
+        proxy = (ROOT / 'app' / 'api' / 'v1' / '[...path]' / 'route.ts').read_text(encoding='utf-8')
+        ready = (ROOT / 'app' / 'health' / 'ready' / 'route.ts').read_text(encoding='utf-8')
         envelope = ENVELOPE.read_text(encoding='utf-8')
         self.assertIn('JSON_CONTENT_TYPE', envelope)
         self.assertIn('envelopeHeaders', envelope)
