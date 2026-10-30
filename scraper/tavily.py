@@ -83,7 +83,10 @@ def matching_detail_link(source, query):
         'https', 'http', 'course', 'courses', 'medical', 'malaysia', 'online', 'training', 'www'}
     matches = []
     for label, href in re.findall(r'\[([^\]\n]{1,500})\]\(([^\s)]+)\)', (source.get('raw_content') or '')[:50000]):
-        url = source_url(urljoin(source['url'], href))
+        try:
+            url = source_url(urljoin(source['url'], href))
+        except ValueError:
+            continue
         if not url or urlsplit(url).hostname != urlsplit(source['url']).hostname or not detail.search(urlsplit(url).path):
             continue
         score = len(words & set(re.findall(r'[a-z0-9]{4,}', (label + ' ' + urlsplit(url).path).casefold())))

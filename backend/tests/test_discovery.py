@@ -78,6 +78,8 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIsNone(d.matching_detail_link(source,'work related A'))
         source={'url':'https://example.org/modules','raw_content':'[Work related](http://127.0.0.1/courses/work-related/)'}
         self.assertIsNone(d.matching_detail_link(source,'work related'))
+        source['raw_content']='[Work related](https://[broken/courses/work-related/)'
+        self.assertIsNone(d.matching_detail_link(source,'work related'))
 
     def test_failed_detail_fetch_retains_directory_and_does_not_retry(self):
         listing='https://example.org/modules'
